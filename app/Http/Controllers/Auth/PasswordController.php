@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
@@ -20,9 +22,20 @@ class PasswordController extends Controller
             'password' => ['required', Password::defaults(), 'confirmed'],
         ]);
 
-        $request->user()->update([
+        $user = $request->user();
+        $user->update([
             'password' => Hash::make($validated['password']),
         ]);
+
+        // Log Password Change Activity
+        activity()
+            ->performedOn($user)
+            ->event('password_change')
+            ->withProperties([
+                'ip' => $request->ip(),
+                'browser' => $request->userAgent(),
+            ])
+            ->log("Password changed successfully by user: {$user->name}");
 
         return back();
     }

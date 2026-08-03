@@ -27,11 +27,6 @@ class UserService
             $user = User::create($data);
             $user->syncRoles($roleNames);
 
-            activity()
-                ->performedOn($user)
-                ->event('created')
-                ->log("Created user account: {$user->name}");
-
             return $user;
         });
     }
@@ -59,11 +54,6 @@ class UserService
             $user->update($data);
             $user->syncRoles($roleNames);
 
-            activity()
-                ->performedOn($user)
-                ->event('updated')
-                ->log("Updated user account: {$user->name}");
-
             return $user;
         });
     }
@@ -79,11 +69,6 @@ class UserService
 
         DB::transaction(function () use ($user) {
             $user->delete();
-
-            activity()
-                ->performedOn($user)
-                ->event('deleted')
-                ->log("Soft-deleted user account: {$user->name}");
         });
     }
 
@@ -97,11 +82,6 @@ class UserService
                 Storage::disk('public')->delete($user->avatar);
             }
             $user->forceDelete();
-
-            activity()
-                ->performedOn($user)
-                ->event('deleted')
-                ->log("Permanently deleted profile: {$user->name}");
         });
     }
 }

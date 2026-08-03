@@ -65,11 +65,6 @@ class SettingService
                     if ($oldValue !== $value) {
                         $setting->value = $value;
                         $setting->save();
-
-                        activity()
-                            ->performedOn($setting)
-                            ->event('updated')
-                            ->log("Updated system setting: {$key}");
                     }
                 }
             }

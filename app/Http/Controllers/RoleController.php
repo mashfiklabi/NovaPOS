@@ -18,7 +18,7 @@ class RoleController extends Controller
      */
     public function index(): Response
     {
-        $this->authorize('roles.view');
+        $this->authorize('viewAny', Role::class);
 
         // Eager load permissions
         $roles = Role::with('permissions')->get();
@@ -35,7 +35,7 @@ class RoleController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        $this->authorize('roles.create');
+        $this->authorize('create', Role::class);
 
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:roles,name',
@@ -46,11 +46,6 @@ class RoleController extends Controller
         $role = Role::create(['name' => $validated['name'], 'guard_name' => 'web']);
         $role->syncPermissions($validated['permission_names']);
 
-        activity()
-            ->performedOn($role)
-            ->event('created')
-            ->log("Created custom security role: {$role->name}");
-
         return redirect()->back()->with('success', 'Security role created successfully.');
     }
 
@@ -59,7 +54,7 @@ class RoleController extends Controller
      */
     public function update(Request $request, Role $role): RedirectResponse
     {
-        $this->authorize('roles.update');
+        $this->authorize('update', $role);
 
         if ($role->name === 'Super Admin') {
             return redirect()->back()->withErrors(['error' => 'The Super Admin role is protected and cannot be edited.']);
@@ -74,11 +69,6 @@ class RoleController extends Controller
         $role->update(['name' => $validated['name']]);
         $role->syncPermissions($validated['permission_names']);
 
-        activity()
-            ->performedOn($role)
-            ->event('updated')
-            ->log("Updated security role: {$role->name}");
-
         return redirect()->back()->with('success', 'Security role updated successfully.');
     }
 
@@ -87,16 +77,11 @@ class RoleController extends Controller
      */
     public function destroy(Role $role): RedirectResponse
     {
-        $this->authorize('roles.delete');
+        $this->authorize('delete', $role);
 
         if ($role->name === 'Super Admin') {
             return redirect()->back()->withErrors(['error' => 'The Super Admin role cannot be deleted.']);
         }
-
-        activity()
-            ->performedOn($role)
-            ->event('deleted')
-            ->log("Permanently deleted role: {$role->name}");
 
         $role->delete();
 

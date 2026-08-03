@@ -21,26 +21,24 @@ Route::get('/', function () {
 
 // Protected Application Routes
 Route::middleware(['auth', 'verified'])->group(function () {
-    // Dashboard Route
+
+    // Dashboard Module
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    // Users Management Routes (using standard resource routing)
+    // Users Management Module
     Route::apiResource('users', UserController::class)->except(['show', 'create', 'edit']);
-    Route::get('/users', [UserController::class, 'index'])->name('users.index');
 
-    // Roles & Permissions Routes
+    // Roles & Permissions Module
     Route::apiResource('roles', RoleController::class)->except(['show', 'create', 'edit']);
-    Route::get('/roles', [RoleController::class, 'index'])->name('roles.index');
 
-    // System Settings Routes
+    // System Settings Module
     Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
-    // POST request handles the multipart/form-data for Logo/Favicon file uploading
     Route::post('/settings', [SettingController::class, 'update'])->name('settings.update');
 
-    // Activity Logs Viewer Routes
+    // Activity Logs Module
     Route::get('/activity-logs', [ActivityLogController::class, 'index'])->name('activity-logs.index');
 
-    // User Profile Routes
+    // User Profile Module
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');

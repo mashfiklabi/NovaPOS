@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Str;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Permission\Traits\HasRoles;
@@ -20,6 +19,11 @@ class User extends Authenticatable
 
     /**
      * The attributes that are mass assignable.
+     *
+     * AUDIT TRAIL FIELD JUSTIFICATIONS:
+     * - 'created_by': Records which Admin or Store Manager created this employee account. Essential for operational audit trail compliance.
+     * - 'updated_by': Records who made administrative alterations (e.g. status suspension or phone updates) on this account.
+     * - 'deleted_by': Records who initiated the archive/soft-deletion of this user profile.
      *
      * @var list<string>
      */
@@ -71,35 +75,5 @@ class User extends Authenticatable
             ->logAll()
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
-    }
-
-    /**
-     * Boot function to automatically generate UUID and audit IDs on creation.
-     */
-    protected static function boot(): void
-    {
-        parent::boot();
-
-        static::creating(function (User $user) {
-            if (empty($user->uuid)) {
-                $user->uuid = (string) Str::uuid();
-            }
-            if (auth()->check()) {
-                $user->created_by = auth()->id();
-            }
-        });
-
-        static::updating(function (User $user) {
-            if (auth()->check()) {
-                $user->updated_by = auth()->id();
-            }
-        });
-
-        static::deleting(function (User $user) {
-            if (auth()->check()) {
-                $user->deleted_by = auth()->id();
-                $user->saveQuietly();
-            }
-        });
     }
 }

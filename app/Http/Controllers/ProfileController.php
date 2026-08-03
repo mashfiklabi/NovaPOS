@@ -54,11 +54,6 @@ class ProfileController extends Controller
                 $user->email_verified_at = null;
             }
             $user->save();
-
-            activity()
-                ->performedOn($user)
-                ->event('updated')
-                ->log('Updated self profile settings');
         }
 
         return Redirect::route('profile.edit')->with('success', 'Profile updated successfully.');

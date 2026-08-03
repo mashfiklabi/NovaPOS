@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
@@ -52,6 +54,16 @@ class NewPasswordController extends Controller
                 ])->save();
 
                 event(new PasswordReset($user));
+
+                // Log Password Reset Activity
+                activity()
+                    ->performedOn($user)
+                    ->event('password_reset')
+                    ->withProperties([
+                        'ip' => $request->ip(),
+                        'browser' => $request->userAgent(),
+                    ])
+                    ->log("Password reset successfully for account: {$user->name}");
             }
         );
 

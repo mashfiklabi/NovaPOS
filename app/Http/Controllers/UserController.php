@@ -25,7 +25,7 @@ class UserController extends Controller
      */
     public function index(Request $request): Response
     {
-        $this->authorize('users.view');
+        $this->authorize('viewAny', User::class);
 
         $search = $request->input('search');
 
@@ -55,7 +55,7 @@ class UserController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        $this->authorize('users.create');
+        $this->authorize('create', User::class);
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -84,7 +84,7 @@ class UserController extends Controller
      */
     public function update(Request $request, User $user): RedirectResponse
     {
-        $this->authorize('users.update');
+        $this->authorize('update', $user);
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -113,7 +113,7 @@ class UserController extends Controller
      */
     public function destroy(User $user): RedirectResponse
     {
-        $this->authorize('users.delete');
+        $this->authorize('delete', $user);
 
         try {
             $this->userService->delete($user);

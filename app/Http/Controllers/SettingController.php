@@ -22,7 +22,7 @@ class SettingController extends Controller
      */
     public function index(): Response
     {
-        $this->authorize('settings.view');
+        $this->authorize('viewAny', Setting::class);
 
         // Fetch settings grouped by category
         $groupedSettings = Setting::all()->groupBy('group');
@@ -38,7 +38,7 @@ class SettingController extends Controller
      */
     public function update(Request $request): RedirectResponse
     {
-        $this->authorize('settings.update');
+        $this->authorize('update', Setting::class);
 
         $validated = $request->validate([
             'shop_name' => 'required|string|max:255',
