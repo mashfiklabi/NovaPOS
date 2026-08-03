@@ -1,16 +1,18 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
-use App\Http\Requests\UserStoreRequest;
-use App\Http\Requests\UserUpdateRequest;
-use App\Models\Role;
+use App\Enums\UserStatus;
 use App\Models\User;
 use App\Services\UserService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rules\Enum;
 use Inertia\Inertia;
 use Inertia\Response;
+use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
@@ -23,21 +25,21 @@ class UserController extends Controller
      */
     public function index(Request $request): Response
     {
-        $this->authorize('manage_users');
+        $this->authorize('users.view');
 
         $search = $request->input('search');
 
-        // Eager load roles to avoid N+1 queries
+        // Eager load roles
         $users = User::with('roles')
             ->when($search, function ($query, $search) {
                 $query->where('name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%");
             })
+            ->orderBy('id', 'desc')
             ->paginate(10)
             ->withQueryString();
 
-        // All roles for assignments
-        $roles = Role::select('id', 'name', 'description')->get();
+        $roles = Role::select('id', 'name')->get();
 
         return Inertia::render('Users/Index', [
             'users' => $users,
@@ -49,43 +51,74 @@ class UserController extends Controller
     }
 
     /**
-     * Store a newly created resource in storage.
+     * Store a newly created user in storage.
      */
-    public function store(UserStoreRequest $request): RedirectResponse
+    public function store(Request $request): RedirectResponse
     {
-        $validated = $request->validated();
-        $roleIds = $validated['role_ids'];
-        unset($validated['role_ids']);
+        $this->authorize('users.create');
 
-        $this->userService->create($validated, $roleIds);
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users',
+            'password' => 'required|string|min:8|confirmed',
+            'phone' => 'nullable|string|max:50',
+            'status' => ['required', new Enum(UserStatus::class)],
+            'role_names' => 'required|array|min:1',
+            'role_names.*' => 'exists:roles,name',
+            'avatar' => 'nullable|image|max:2048',
+        ]);
 
-        return redirect()->back()->with('success', 'User created successfully.');
+        $roleNames = $validated['role_names'];
+        unset($validated['role_names']);
+
+        $avatar = $request->file('avatar');
+        unset($validated['avatar']);
+
+        $this->userService->create($validated, $roleNames, $avatar);
+
+        return redirect()->back()->with('success', 'User account created successfully.');
     }
 
     /**
-     * Update the specified resource in storage.
+     * Update the specified user in storage.
      */
-    public function update(UserUpdateRequest $request, User $user): RedirectResponse
+    public function update(Request $request, User $user): RedirectResponse
     {
-        $validated = $request->validated();
-        $roleIds = $validated['role_ids'];
-        unset($validated['role_ids']);
+        $this->authorize('users.update');
 
-        $this->userService->update($user, $validated, $roleIds);
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users,email,'.$user->id,
+            'password' => 'nullable|string|min:8|confirmed',
+            'phone' => 'nullable|string|max:50',
+            'status' => ['required', new Enum(UserStatus::class)],
+            'role_names' => 'required|array|min:1',
+            'role_names.*' => 'exists:roles,name',
+            'avatar' => 'nullable|image|max:2048',
+        ]);
 
-        return redirect()->back()->with('success', 'User updated successfully.');
+        $roleNames = $validated['role_names'];
+        unset($validated['role_names']);
+
+        $avatar = $request->file('avatar');
+        unset($validated['avatar']);
+
+        $this->userService->update($user, $validated, $roleNames, $avatar);
+
+        return redirect()->back()->with('success', 'User account updated successfully.');
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Remove the specified user from storage.
      */
     public function destroy(User $user): RedirectResponse
     {
-        $this->authorize('manage_users');
+        $this->authorize('users.delete');
 
         try {
             $this->userService->delete($user);
-            return redirect()->back()->with('success', 'User deleted successfully.');
+
+            return redirect()->back()->with('success', 'User soft-deleted successfully.');
         } catch (\InvalidArgumentException $e) {
             return redirect()->back()->withErrors(['error' => $e->getMessage()]);
         }

@@ -1,30 +1,26 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
-use App\Http\Requests\RoleStoreRequest;
-use App\Http\Requests\RoleUpdateRequest;
-use App\Models\Permission;
-use App\Models\Role;
-use App\Services\RoleService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 class RoleController extends Controller
 {
-    public function __construct(
-        protected RoleService $roleService
-    ) {}
-
     /**
-     * Display a listing of the resource.
+     * Display a listing of roles and system permissions.
      */
     public function index(): Response
     {
-        $this->authorize('manage_roles');
+        $this->authorize('roles.view');
 
-        // Eager load permissions to avoid N+1 queries
+        // Eager load permissions
         $roles = Role::with('permissions')->get();
         $permissions = Permission::all();
 
@@ -35,45 +31,75 @@ class RoleController extends Controller
     }
 
     /**
-     * Store a newly created resource in storage.
+     * Store a newly created role in storage.
      */
-    public function store(RoleStoreRequest $request): RedirectResponse
+    public function store(Request $request): RedirectResponse
     {
-        $validated = $request->validated();
-        $permissionIds = $validated['permission_ids'];
-        unset($validated['permission_ids']);
+        $this->authorize('roles.create');
 
-        $this->roleService->create($validated, $permissionIds);
+        $validated = $request->validate([
+            'name' => 'required|string|max:255|unique:roles,name',
+            'permission_names' => 'required|array',
+            'permission_names.*' => 'exists:permissions,name',
+        ]);
 
-        return redirect()->back()->with('success', 'Role created successfully.');
+        $role = Role::create(['name' => $validated['name'], 'guard_name' => 'web']);
+        $role->syncPermissions($validated['permission_names']);
+
+        activity()
+            ->performedOn($role)
+            ->event('created')
+            ->log("Created custom security role: {$role->name}");
+
+        return redirect()->back()->with('success', 'Security role created successfully.');
     }
 
     /**
-     * Update the specified resource in storage.
+     * Update the specified role in storage.
      */
-    public function update(RoleUpdateRequest $request, Role $role): RedirectResponse
+    public function update(Request $request, Role $role): RedirectResponse
     {
-        $validated = $request->validated();
-        $permissionIds = $validated['permission_ids'];
-        unset($validated['permission_ids']);
+        $this->authorize('roles.update');
 
-        $this->roleService->update($role, $validated, $permissionIds);
+        if ($role->name === 'Super Admin') {
+            return redirect()->back()->withErrors(['error' => 'The Super Admin role is protected and cannot be edited.']);
+        }
 
-        return redirect()->back()->with('success', 'Role updated successfully.');
+        $validated = $request->validate([
+            'name' => 'required|string|max:255|unique:roles,name,'.$role->id,
+            'permission_names' => 'required|array',
+            'permission_names.*' => 'exists:permissions,name',
+        ]);
+
+        $role->update(['name' => $validated['name']]);
+        $role->syncPermissions($validated['permission_names']);
+
+        activity()
+            ->performedOn($role)
+            ->event('updated')
+            ->log("Updated security role: {$role->name}");
+
+        return redirect()->back()->with('success', 'Security role updated successfully.');
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Remove the specified role from storage.
      */
     public function destroy(Role $role): RedirectResponse
     {
-        $this->authorize('manage_roles');
+        $this->authorize('roles.delete');
 
-        try {
-            $this->roleService->delete($role);
-            return redirect()->back()->with('success', 'Role deleted successfully.');
-        } catch (\InvalidArgumentException $e) {
-            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+        if ($role->name === 'Super Admin') {
+            return redirect()->back()->withErrors(['error' => 'The Super Admin role cannot be deleted.']);
         }
+
+        activity()
+            ->performedOn($role)
+            ->event('deleted')
+            ->log("Permanently deleted role: {$role->name}");
+
+        $role->delete();
+
+        return redirect()->back()->with('success', 'Security role deleted successfully.');
     }
 }

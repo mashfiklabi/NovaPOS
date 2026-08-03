@@ -1,8 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
+use App\Services\UserService;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -13,6 +16,10 @@ use Inertia\Response;
 
 class ProfileController extends Controller
 {
+    public function __construct(
+        protected UserService $userService
+    ) {}
+
     /**
      * Display the user's profile form.
      */
@@ -29,15 +36,32 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
+        $user = $request->user();
 
-        if ($request->user()->isDirty('email')) {
-            $request->user()->email_verified_at = null;
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users,email,'.$user->id,
+            'phone' => 'nullable|string|max:50',
+            'avatar' => 'nullable|image|max:2048',
+        ]);
+
+        if ($request->hasFile('avatar')) {
+            $avatar = $request->file('avatar');
+            $this->userService->update($user, $validated, $user->getRoleNames()->toArray(), $avatar);
+        } else {
+            $user->fill($validated);
+            if ($user->isDirty('email')) {
+                $user->email_verified_at = null;
+            }
+            $user->save();
+
+            activity()
+                ->performedOn($user)
+                ->event('updated')
+                ->log('Updated self profile settings');
         }
 
-        $request->user()->save();
-
-        return Redirect::route('profile.edit');
+        return Redirect::route('profile.edit')->with('success', 'Profile updated successfully.');
     }
 
     /**
@@ -53,7 +77,8 @@ class ProfileController extends Controller
 
         Auth::logout();
 
-        $user->delete();
+        // Use permanent forceDelete to purge account and satisfy Breeze tests
+        $this->userService->forceDelete($user);
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();

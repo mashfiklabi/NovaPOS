@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class RoleUpdateRequest extends FormRequest
@@ -17,14 +18,14 @@ class RoleUpdateRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
         $roleId = $this->route('role')?->id ?? $this->role;
 
         return [
-            'name' => 'required|string|max:255|unique:roles,name,' . $roleId,
+            'name' => 'required|string|max:255|unique:roles,name,'.$roleId,
             'description' => 'nullable|string|max:1000',
             'permission_ids' => 'required|array|min:1',
             'permission_ids.*' => 'exists:permissions,id',

@@ -18,8 +18,15 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
-            $table->string('status', 30)->default('active'); // Status using enum/constant, never boolean
+            $table->string('avatar')->nullable();
+            $table->string('phone')->nullable();
+            $table->string('status', 30)->default('active'); // status using enum/constant, never boolean
+            $table->timestamp('last_login_at')->nullable();
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('updated_by')->nullable();
+            $table->unsignedBigInteger('deleted_by')->nullable();
             $table->rememberToken();
+            $table->softDeletes(); // SoftDeletes enabled on User
             $table->timestamps();
         });
 

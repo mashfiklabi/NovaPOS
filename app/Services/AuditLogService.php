@@ -11,12 +11,11 @@ class AuditLogService
     /**
      * Create an audit log entry.
      *
-     * @param string $action The action performed (e.g. 'settings_update', 'role_create', 'user_login')
-     * @param string|null $modelType The class name of the model affected
-     * @param int|null $modelId The ID of the model affected
-     * @param array|null $oldValues Old attribute values before change
-     * @param array|null $newValues New attribute values after change
-     * @return AuditLog
+     * @param  string  $action  The action performed (e.g. 'settings_update', 'role_create', 'user_login')
+     * @param  string|null  $modelType  The class name of the model affected
+     * @param  int|null  $modelId  The ID of the model affected
+     * @param  array|null  $oldValues  Old attribute values before change
+     * @param  array|null  $newValues  New attribute values after change
      */
     public function log(
         string $action,

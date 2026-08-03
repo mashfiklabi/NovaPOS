@@ -14,8 +14,8 @@ class RoleService
     /**
      * Create a new role with permissions.
      *
-     * @param array{name: string, description: string|null} $data
-     * @param array<int> $permissionIds
+     * @param  array{name: string, description: string|null}  $data
+     * @param  array<int>  $permissionIds
      */
     public function create(array $data, array $permissionIds): Role
     {
@@ -42,8 +42,8 @@ class RoleService
     /**
      * Update an existing role and its permissions.
      *
-     * @param array{name: string, description: string|null} $data
-     * @param array<int> $permissionIds
+     * @param  array{name: string, description: string|null}  $data
+     * @param  array<int>  $permissionIds
      */
     public function update(Role $role, array $data, array $permissionIds): Role
     {

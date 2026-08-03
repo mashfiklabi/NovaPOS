@@ -1,41 +1,59 @@
 <script setup lang="ts">
-import { useForm, Head, usePage } from '@inertiajs/vue3';
+import { useForm, Head } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import Card from '@/Components/Card.vue';
+import AppCard from '@/Components/AppCard.vue';
 import PageHeader from '@/Components/PageHeader.vue';
-import TextInput from '@/Components/TextInput.vue';
-import InputLabel from '@/Components/InputLabel.vue';
-import InputError from '@/Components/InputError.vue';
-import PrimaryButton from '@/Components/PrimaryButton.vue';
-import { PageProps } from '@/types';
+import AppInput from '@/Components/AppInput.vue';
+import AppButton from '@/Components/AppButton.vue';
+import AppTextarea from '@/Components/AppTextarea.vue';
+
+interface SettingItem {
+    id: number;
+    key: string;
+    value: string | null;
+    group: string;
+    type: string;
+}
 
 const props = defineProps<{
     settings: {
         shop_name?: string;
         phone?: string;
+        email?: string;
         address?: string;
         currency?: string;
+        timezone?: string;
         invoice_prefix?: string;
         tax_rate?: string | number;
-        timezone?: string;
+        logo?: string | null;
+        favicon?: string | null;
     };
+    grouped_settings: Record<string, SettingItem[]>;
 }>();
 
-// Get typed page props
-const page = usePage<PageProps>();
-
-// Initialize inertia form
+// Initialize Inertia form with file upload support
 const form = useForm({
     shop_name: props.settings.shop_name ?? '',
     phone: props.settings.phone ?? '',
+    email: props.settings.email ?? '',
     address: props.settings.address ?? '',
     currency: props.settings.currency ?? 'USD',
+    timezone: props.settings.timezone ?? 'UTC',
     invoice_prefix: props.settings.invoice_prefix ?? 'INV-',
     tax_rate: String(props.settings.tax_rate ?? '0'),
-    timezone: props.settings.timezone ?? 'UTC',
+    logo: null as File | null,
+    favicon: null as File | null,
 });
 
+const handleFile = (field: 'logo' | 'favicon', event: Event) => {
+    const files = (event.target as HTMLInputElement).files;
+    if (files && files.length > 0) {
+        form[field] = files[0];
+    }
+};
+
 const submit = () => {
+    // We use post to /settings to allow file uploads (multipart/form-data)
     form.post('/settings', {
         preserveScroll: true,
     });
@@ -44,111 +62,129 @@ const submit = () => {
 
 <template>
     <AppLayout>
-        <Head title="System Settings" />
+        <Head title="System Configuration" />
 
         <PageHeader title="Settings" :breadcrumbs="[{ name: 'Settings' }]" />
 
-        <div class="max-w-4xl">
-            <form @submit.prevent="submit">
-                <Card title="Shop & Localization Configuration" subtitle="Configure the foundational metadata and tax properties for NovaPOS.">
-
-                    <!-- Alert success notification -->
-                    <div v-if="form.recentlySuccessful" class="mb-6 p-4 rounded-lg bg-green-50 text-green-700 text-sm font-medium dark:bg-green-950/30 dark:text-green-400">
-                        Settings saved successfully! Future receipts, PDF invoices, and currencies have been updated.
-                    </div>
-
+        <div class="max-w-4xl space-y-6">
+            <form @submit.prevent="submit" class="space-y-6">
+                <!-- Group 1: General Settings -->
+                <AppCard title="General Information" subtitle="Configure shop contact details, physical address, and names.">
                     <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6 mt-4">
                         <div class="sm:col-span-4">
-                            <InputLabel for="shop_name" value="Shop Name" />
-                            <TextInput
-                                id="shop_name"
-                                type="text"
-                                class="mt-1 block w-full"
+                            <AppInput
+                                label="Shop Name"
                                 v-model="form.shop_name"
+                                :error="form.errors.shop_name"
                                 required
                             />
-                            <InputError class="mt-1" :message="form.errors.shop_name" />
                         </div>
 
                         <div class="sm:col-span-3">
-                            <InputLabel for="phone" value="Phone Number" />
-                            <TextInput
-                                id="phone"
-                                type="text"
-                                class="mt-1 block w-full"
+                            <AppInput
+                                label="Phone Number"
                                 v-model="form.phone"
+                                :error="form.errors.phone"
                             />
-                            <InputError class="mt-1" :message="form.errors.phone" />
                         </div>
 
                         <div class="sm:col-span-3">
-                            <InputLabel for="currency" value="Currency Code (e.g. USD, EUR, GBP)" />
-                            <TextInput
-                                id="currency"
-                                type="text"
-                                class="mt-1 block w-full"
-                                v-model="form.currency"
+                            <AppInput
+                                label="Contact Email"
+                                type="email"
+                                v-model="form.email"
+                                :error="form.errors.email"
                                 required
                             />
-                            <InputError class="mt-1" :message="form.errors.currency" />
                         </div>
 
                         <div class="sm:col-span-6">
-                            <InputLabel for="address" value="Physical Shop Address" />
-                            <textarea
-                                id="address"
-                                rows="3"
-                                class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-800 dark:bg-gray-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-gray-900 dark:text-gray-100"
+                            <AppTextarea
+                                label="Physical Address"
                                 v-model="form.address"
+                                :error="form.errors.address"
                             />
-                            <InputError class="mt-1" :message="form.errors.address" />
-                        </div>
-
-                        <div class="sm:col-span-2">
-                            <InputLabel for="invoice_prefix" value="Invoice Prefix" />
-                            <TextInput
-                                id="invoice_prefix"
-                                type="text"
-                                class="mt-1 block w-full"
-                                v-model="form.invoice_prefix"
-                                required
-                            />
-                            <InputError class="mt-1" :message="form.errors.invoice_prefix" />
-                        </div>
-
-                        <div class="sm:col-span-2">
-                            <InputLabel for="tax_rate" value="Tax Rate (%)" />
-                            <TextInput
-                                id="tax_rate"
-                                type="text"
-                                class="mt-1 block w-full"
-                                v-model="form.tax_rate"
-                                required
-                            />
-                            <InputError class="mt-1" :message="form.errors.tax_rate" />
-                        </div>
-
-                        <div class="sm:col-span-2">
-                            <InputLabel for="timezone" value="Timezone" />
-                            <TextInput
-                                id="timezone"
-                                type="text"
-                                class="mt-1 block w-full"
-                                v-model="form.timezone"
-                                required
-                            />
-                            <InputError class="mt-1" :message="form.errors.timezone" />
                         </div>
                     </div>
+                </AppCard>
 
-                    <template #footer>
-                        <div class="flex justify-end">
-                            <PrimaryButton :disabled="form.processing">
-                                Save Settings
-                            </PrimaryButton>
+                <!-- Group 2: POS & Pricing Settings -->
+                <AppCard title="Localization & POS Checkout Properties" subtitle="Adjust invoice styles, standard taxes, and currency attributes.">
+                    <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6 mt-4">
+                        <div class="sm:col-span-3">
+                            <AppInput
+                                label="Currency Symbol/Code"
+                                v-model="form.currency"
+                                :error="form.errors.currency"
+                                required
+                            />
                         </div>
-                    </template>
-                </Card>
+
+                        <div class="sm:col-span-3">
+                            <AppInput
+                                label="Local Timezone"
+                                v-model="form.timezone"
+                                :error="form.errors.timezone"
+                                required
+                            />
+                        </div>
+
+                        <div class="sm:col-span-3">
+                            <AppInput
+                                label="Invoice Prefix"
+                                v-model="form.invoice_prefix"
+                                :error="form.errors.invoice_prefix"
+                                required
+                            />
+                        </div>
+
+                        <div class="sm:col-span-3">
+                            <AppInput
+                                label="Default Tax Rate (%)"
+                                type="text"
+                                v-model="form.tax_rate"
+                                :error="form.errors.tax_rate"
+                                required
+                            />
+                        </div>
+                    </div>
+                </AppCard>
+
+                <!-- Group 3: Branding & Appearance -->
+                <AppCard title="Appearance & Branding" subtitle="Upload customized logos and favicons for receipts and invoices.">
+                    <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6 mt-4">
+                        <div class="sm:col-span-3">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Store Logo</label>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                @change="handleFile('logo', $event)"
+                                class="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                            />
+                            <p v-if="settings.logo" class="mt-1 text-[10px] text-gray-400">Current: {{ settings.logo }}</p>
+                            <p v-if="form.errors.logo" class="mt-1 text-xs text-red-600">{{ form.errors.logo }}</p>
+                        </div>
+
+                        <div class="sm:col-span-3">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Favicon Icon</label>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                @change="handleFile('favicon', $event)"
+                                class="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                            />
+                            <p v-if="settings.favicon" class="mt-1 text-[10px] text-gray-400">Current: {{ settings.favicon }}</p>
+                            <p v-if="form.errors.favicon" class="mt-1 text-xs text-red-600">{{ form.errors.favicon }}</p>
+                        </div>
+                    </div>
+                </AppCard>
+
+                <!-- Save Footer -->
+                <div class="flex justify-end pt-2">
+                    <AppButton type="submit" variant="primary" :loading="form.processing">
+                        Save System Settings
+                    </AppButton>
+                </div>
             </form>
         </div>
     </AppLayout>

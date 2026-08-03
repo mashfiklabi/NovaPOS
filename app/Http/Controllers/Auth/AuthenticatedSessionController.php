@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
@@ -33,6 +35,23 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
+        $user = Auth::user();
+        if ($user) {
+            // Update last login timestamp
+            $user->last_login_at = now();
+            $user->save();
+
+            // Log Spatie Activity Log with IP & Browser properties
+            activity()
+                ->performedOn($user)
+                ->event('login')
+                ->withProperties([
+                    'ip' => $request->ip(),
+                    'browser' => $request->userAgent(),
+                ])
+                ->log("User logged in: {$user->name}");
+        }
+
         return redirect()->intended(route('dashboard', absolute: false));
     }
 
@@ -41,6 +60,18 @@ class AuthenticatedSessionController extends Controller
      */
     public function destroy(Request $request): RedirectResponse
     {
+        $user = Auth::user();
+        if ($user) {
+            activity()
+                ->performedOn($user)
+                ->event('logout')
+                ->withProperties([
+                    'ip' => $request->ip(),
+                    'browser' => $request->userAgent(),
+                ])
+                ->log("User logged out: {$user->name}");
+        }
+
         Auth::guard('web')->logout();
 
         $request->session()->invalidate();

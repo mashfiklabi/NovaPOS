@@ -4,6 +4,8 @@ export interface User {
     name: string;
     email: string;
     status: string;
+    phone: string | null;
+    avatar: string | null;
     roles: string[];
     permissions: string[];
     email_verified_at?: string;
@@ -14,9 +16,19 @@ export interface Settings {
     currency: string;
     tax_rate: string;
     phone: string;
+    email: string;
     address: string;
     invoice_prefix: string;
     timezone: string;
+    logo: string | null;
+    favicon: string | null;
+}
+
+export interface NavigationItem {
+    title: string;
+    route: string;
+    icon: string;
+    permission: string;
 }
 
 export type PageProps<
@@ -26,4 +38,5 @@ export type PageProps<
         user: User;
     };
     settings: Settings;
+    navigation: NavigationItem[];
 };

@@ -1,14 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
-use App\Models\Permission;
-use App\Models\Role;
+use App\Enums\UserStatus;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 class DatabaseSeeder extends Seeder
 {
@@ -17,102 +20,153 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // 1. Seed Permissions
+        // Reset cached roles and permissions
+        app()[PermissionRegistrar::class]->forgetCachedPermissions();
+
+        // 1. Seed Granular Permissions
         $permissions = [
-            'view_dashboard' => 'Ability to view the main dashboard metrics and charts',
-            'manage_users' => 'Ability to create, update, delete, and list users',
-            'manage_roles' => 'Ability to manage roles and permission assignments',
-            'manage_settings' => 'Ability to edit global system and shop configuration settings',
-            'view_audit_logs' => 'Ability to inspect system audit logs and history',
+            'dashboard.view' => 'Ability to view the main dashboard metrics and charts',
+
+            'settings.view' => 'Ability to view settings config',
+            'settings.update' => 'Ability to edit global system and shop configuration settings',
+
+            'users.view' => 'Ability to view users index list',
+            'users.create' => 'Ability to register new system users',
+            'users.update' => 'Ability to edit existing system users',
+            'users.delete' => 'Ability to soft-delete or block system users',
+
+            'roles.view' => 'Ability to view roles index list',
+            'roles.create' => 'Ability to design new user roles',
+            'roles.update' => 'Ability to edit existing user roles and mapping',
+            'roles.delete' => 'Ability to remove user roles',
+
+            'permissions.view' => 'Ability to list system-level permissions',
         ];
 
-        $permissionModels = [];
         foreach ($permissions as $name => $description) {
-            $permissionModels[$name] = Permission::create([
-                'uuid' => (string) Str::uuid(),
-                'name' => $name,
-                'description' => $description,
-            ]);
+            Permission::findOrCreate($name, 'web');
         }
 
-        // 2. Seed Roles
-        $roles = [
-            'Admin' => 'Full administrative access to the entire system',
-            'Manager' => 'Store manager with access to dashboard and user management',
-            'Cashier' => 'Point of sale cashier with basic access to POS and dashboard',
-        ];
+        // 2. Seed Super Admin Role
+        $superAdminRole = Role::findOrCreate('Super Admin', 'web');
 
-        $roleModels = [];
-        foreach ($roles as $name => $description) {
-            $roleModels[$name] = Role::create([
-                'uuid' => (string) Str::uuid(),
-                'name' => $name,
-                'description' => $description,
-            ]);
-        }
+        // Super Admin gets all permissions assigned
+        $superAdminRole->syncPermissions(array_keys($permissions));
 
-        // 3. Assign Permissions to Roles
-        // Admin gets all
-        $roleModels['Admin']->permissions()->sync(collect($permissionModels)->pluck('id')->toArray());
-
-        // Manager gets view_dashboard and manage_users
-        $roleModels['Manager']->permissions()->sync([
-            $permissionModels['view_dashboard']->id,
-            $permissionModels['manage_users']->id,
+        // Let's create some other roles for demo purposes (e.g. Manager, Cashier)
+        $managerRole = Role::findOrCreate('Manager', 'web');
+        $managerRole->syncPermissions([
+            'dashboard.view',
+            'users.view',
+            'users.create',
+            'users.update',
         ]);
 
-        // Cashier gets view_dashboard
-        $roleModels['Cashier']->permissions()->sync([
-            $permissionModels['view_dashboard']->id,
+        $cashierRole = Role::findOrCreate('Cashier', 'web');
+        $cashierRole->syncPermissions([
+            'dashboard.view',
         ]);
 
-        // 4. Seed Default Admin User
+        // 3. Seed Default Super Admin User
         $admin = User::create([
             'uuid' => (string) Str::uuid(),
-            'name' => 'Admin User',
+            'name' => 'Super Admin',
             'email' => 'admin@novapos.com',
-            'password' => 'Password123!', // Automatic hashed cast in User model
-            'status' => User::STATUS_ACTIVE,
+            'password' => 'Password123!', // Automatically hashed by User cast
+            'phone' => '+1 (555) 019-0000',
+            'status' => UserStatus::ACTIVE,
         ]);
-        $admin->roles()->sync([$roleModels['Admin']->id]);
 
-        // Seed some standard users with other roles for preview / testing
-        $manager = User::create([
+        // Assign Spatie Super Admin role
+        $admin->assignRole($superAdminRole);
+
+        // Seed some demo users
+        $managerUser = User::create([
             'uuid' => (string) Str::uuid(),
             'name' => 'Jane Manager',
             'email' => 'manager@novapos.com',
             'password' => 'Password123!',
-            'status' => User::STATUS_ACTIVE,
+            'phone' => '+1 (555) 019-1111',
+            'status' => UserStatus::ACTIVE,
         ]);
-        $manager->roles()->sync([$roleModels['Manager']->id]);
+        $managerUser->assignRole($managerRole);
 
-        $cashier = User::create([
+        $cashierUser = User::create([
             'uuid' => (string) Str::uuid(),
             'name' => 'John Cashier',
             'email' => 'cashier@novapos.com',
             'password' => 'Password123!',
-            'status' => User::STATUS_ACTIVE,
+            'phone' => '+1 (555) 019-2222',
+            'status' => UserStatus::ACTIVE,
         ]);
-        $cashier->roles()->sync([$roleModels['Cashier']->id]);
+        $cashierUser->assignRole($cashierRole);
 
-        // 5. Seed Key-Value Settings
+        // 4. Seed Settings Table
         $settings = [
-            'shop_name' => 'NovaPOS Retail',
-            'phone' => '+1 (555) 019-2834',
-            'address' => '123 Tech Avenue, Silicon Valley, CA',
-            'currency' => 'USD',
-            'invoice_prefix' => 'INV-',
-            'tax_rate' => '8.25',
-            'timezone' => 'UTC',
-            'logo' => null,
-            'favicon' => null,
+            [
+                'key' => 'shop_name',
+                'value' => 'NovaPOS Retail',
+                'group' => 'general',
+                'type' => 'text',
+            ],
+            [
+                'key' => 'phone',
+                'value' => '+1 (555) 019-2834',
+                'group' => 'general',
+                'type' => 'text',
+            ],
+            [
+                'key' => 'email',
+                'value' => 'info@novapos.com',
+                'group' => 'general',
+                'type' => 'text',
+            ],
+            [
+                'key' => 'address',
+                'value' => '123 Tech Avenue, Silicon Valley, CA',
+                'group' => 'general',
+                'type' => 'textarea',
+            ],
+            [
+                'key' => 'currency',
+                'value' => 'USD',
+                'group' => 'localization',
+                'type' => 'text',
+            ],
+            [
+                'key' => 'timezone',
+                'value' => 'UTC',
+                'group' => 'localization',
+                'type' => 'text',
+            ],
+            [
+                'key' => 'invoice_prefix',
+                'value' => 'INV-',
+                'group' => 'pos',
+                'type' => 'text',
+            ],
+            [
+                'key' => 'tax_rate',
+                'value' => '8.25',
+                'group' => 'pos',
+                'type' => 'number',
+            ],
+            [
+                'key' => 'logo',
+                'value' => null,
+                'group' => 'appearance',
+                'type' => 'file',
+            ],
+            [
+                'key' => 'favicon',
+                'value' => null,
+                'group' => 'appearance',
+                'type' => 'file',
+            ],
         ];
 
-        foreach ($settings as $key => $value) {
-            Setting::create([
-                'key' => $key,
-                'value' => $value,
-            ]);
+        foreach ($settings as $item) {
+            Setting::create($item);
         }
     }
 }

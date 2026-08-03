@@ -1,55 +1,47 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, computed } from 'vue';
-import { Head, usePage } from '@inertiajs/vue3';
+import { onMounted, onUnmounted, ref } from 'vue';
+import { Head } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
-import Card from '@/Components/Card.vue';
 import PageHeader from '@/Components/PageHeader.vue';
+import StatCard from '@/Components/StatCard.vue';
+import AppCard from '@/Components/AppCard.vue';
+import AppTable from '@/Components/AppTable.vue';
 import Chart from 'chart.js/auto';
-import { PageProps } from '@/types';
+
+interface RecentActivity {
+    id: number;
+    user: string;
+    action: string;
+    ip: string;
+    browser: string;
+    timestamp: string;
+}
+
+interface LatestLogin {
+    id: number;
+    name: string;
+    email: string;
+    avatar: string | null;
+    last_login_at: string | null;
+}
 
 const props = defineProps<{
     metrics: {
-        today_sales: number;
-        today_purchases: number;
-        total_products: number;
-        total_customers: number;
-        total_suppliers: number;
+        users: number;
+        roles: number;
+        permissions: number;
+        settings: number;
     };
-    low_stock_alerts: Array<{
-        id: number;
-        name: string;
-        sku: string;
-        stock: number;
-        min_stock: number;
-    }>;
-    recent_sales: Array<{
-        id: number;
-        invoice_no: string;
-        customer: string;
-        items: number;
-        total: number;
-        status: string;
-        time: string;
-    }>;
-    sales_chart_data: {
+    recent_activities: RecentActivity[];
+    latest_logins: LatestLogin[];
+    chart_data: {
         labels: string[];
         sales: number[];
         purchases: number[];
     };
 }>();
 
-const page = usePage<PageProps>();
-const settings = computed(() => page.props.settings);
-
-// Format money helper
-const formatMoney = (value: number) => {
-    return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: settings.value?.currency || 'USD',
-    }).format(value);
-};
-
-// Chart reference
+// Chart setup
 const chartCanvas = ref<HTMLCanvasElement | null>(null);
 let chartInstance: Chart | null = null;
 
@@ -60,11 +52,11 @@ onMounted(() => {
             chartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: props.sales_chart_data.labels,
+                    labels: props.chart_data.labels,
                     datasets: [
                         {
-                            label: 'Sales',
-                            data: props.sales_chart_data.sales,
+                            label: 'Sales ($)',
+                            data: props.chart_data.sales,
                             borderColor: '#4f46e5',
                             backgroundColor: 'rgba(79, 70, 229, 0.05)',
                             tension: 0.3,
@@ -72,8 +64,8 @@ onMounted(() => {
                             borderWidth: 2,
                         },
                         {
-                            label: 'Purchases',
-                            data: props.sales_chart_data.purchases,
+                            label: 'Purchases ($)',
+                            data: props.chart_data.purchases,
                             borderColor: '#06b6d4',
                             backgroundColor: 'rgba(6, 182, 212, 0.05)',
                             tension: 0.3,
@@ -90,9 +82,6 @@ onMounted(() => {
                             position: 'top',
                             labels: {
                                 color: document.documentElement.classList.contains('dark') ? '#9ca3af' : '#4b5563',
-                                font: {
-                                    weight: 'bold'
-                                }
                             }
                         }
                     },
@@ -125,163 +114,122 @@ onUnmounted(() => {
         chartInstance.destroy();
     }
 });
+
+// Format timestamp
+const formatTime = (timeString: string) => {
+    return new Date(timeString).toLocaleString('en-US', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+    });
+};
 </script>
 
 <template>
     <AppLayout>
-        <Head title="Dashboard" />
+        <Head title="System Dashboard" />
 
-        <PageHeader title="Overview" :breadcrumbs="[{ name: 'Dashboard' }]">
-            <template #actions>
-                <span class="text-sm text-gray-500 dark:text-gray-400 font-medium">
-                    Live system status OK
-                </span>
-            </template>
-        </PageHeader>
+        <PageHeader title="Dashboard" :breadcrumbs="[{ name: 'Dashboard' }]" />
 
-        <!-- Metrics cards row -->
-        <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5 mb-8">
-            <Card title="Today's Sales" class="relative overflow-hidden">
-                <div class="mt-2 flex items-baseline justify-between">
-                    <span class="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-                        {{ formatMoney(metrics.today_sales) }}
-                    </span>
-                    <span class="inline-flex items-center rounded-md bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-950/30 dark:text-green-400">
-                        +12.5%
-                    </span>
-                </div>
-                <p class="mt-1 text-xs text-gray-500">vs yesterday</p>
-            </Card>
-
-            <Card title="Today's Purchase">
-                <div class="mt-2 flex items-baseline justify-between">
-                    <span class="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-                        {{ formatMoney(metrics.today_purchases) }}
-                    </span>
-                    <span class="inline-flex items-center rounded-md bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950/30 dark:text-blue-400">
-                        Stable
-                    </span>
-                </div>
-                <p class="mt-1 text-xs text-gray-500">supplier invoices</p>
-            </Card>
-
-            <Card title="Total Products">
-                <div class="mt-2 flex items-baseline justify-between">
-                    <span class="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-                        {{ metrics.total_products }}
-                    </span>
-                </div>
-                <p class="mt-1 text-xs text-gray-500">active catalog items</p>
-            </Card>
-
-            <Card title="Customers">
-                <div class="mt-2 flex items-baseline justify-between">
-                    <span class="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-                        {{ metrics.total_customers }}
-                    </span>
-                </div>
-                <p class="mt-1 text-xs text-gray-500">registered customers</p>
-            </Card>
-
-            <Card title="Suppliers">
-                <div class="mt-2 flex items-baseline justify-between">
-                    <span class="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-                        {{ metrics.total_suppliers }}
-                    </span>
-                </div>
-                <p class="mt-1 text-xs text-gray-500">vendors configured</p>
-            </Card>
+        <!-- Stat Card Rows -->
+        <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+            <StatCard
+                title="System Users"
+                :value="metrics.users"
+                description="Active store & admin accounts"
+                :trend="{ label: 'Manage Accounts', type: 'stable' }"
+            />
+            <StatCard
+                title="Spatie Roles"
+                :value="metrics.roles"
+                description="Custom RBAC authorization roles"
+                :trend="{ label: 'Configured', type: 'stable' }"
+            />
+            <StatCard
+                title="Spatie Permissions"
+                :value="metrics.permissions"
+                description="Granular permission gates"
+                :trend="{ label: 'Operational', type: 'stable' }"
+            />
+            <StatCard
+                title="Settings Parameters"
+                :value="metrics.settings"
+                description="Shop localization properties"
+                :trend="{ label: 'Configured', type: 'stable' }"
+            />
         </div>
 
-        <!-- Charts and tables row -->
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-3 mb-8">
-            <!-- Sales & Purchases Trend Line Chart -->
+            <!-- Line Chart of Checkout Flow -->
             <div class="lg:col-span-2">
-                <Card title="Sales & Purchases Flow">
+                <AppCard title="Checkout Flow Analytics" subtitle="A visual summary of store sales vs inventory purchases.">
                     <div class="h-80 relative mt-4">
                         <canvas ref="chartCanvas"></canvas>
                     </div>
-                </Card>
+                </AppCard>
             </div>
 
-            <!-- Low Stock Alerts -->
+            <!-- Latest User Logins -->
             <div>
-                <Card title="Low Stock Alerts" subtitle="Items requiring immediate restock">
+                <AppCard title="Latest Access & Logins" subtitle="Verify authorized personnel checkouts">
                     <div class="mt-4 flow-root">
                         <ul role="list" class="-my-5 divide-y divide-gray-100 dark:divide-gray-800">
-                            <li v-for="item in low_stock_alerts" :key="item.id" class="py-4">
-                                <div class="flex items-center space-x-4">
+                            <li v-for="user in latest_logins" :key="user.id" class="py-4">
+                                <div class="flex items-center space-x-3">
+                                    <div class="h-8 w-8 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center font-bold text-sm text-gray-700 dark:text-gray-300">
+                                        {{ user.name.charAt(0) }}
+                                    </div>
                                     <div class="min-w-0 flex-1">
-                                        <p class="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                            {{ item.name }}
+                                        <p class="truncate text-xs font-semibold text-gray-900 dark:text-gray-100">
+                                            {{ user.name }}
                                         </p>
-                                        <p class="truncate text-xs text-gray-500">
-                                            SKU: {{ item.sku }}
+                                        <p class="truncate text-[10px] text-gray-500">
+                                            {{ user.email }}
                                         </p>
                                     </div>
                                     <div class="flex flex-col items-end">
-                                        <span class="inline-flex items-center rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 dark:bg-red-950/30 dark:text-red-400">
-                                            Stock: {{ item.stock }}
-                                        </span>
-                                        <span class="mt-1 text-[10px] text-gray-400">
-                                            Target: {{ item.min_stock }}
+                                        <span class="text-[10px] text-gray-400">
+                                            {{ user.last_login_at ? formatTime(user.last_login_at) : 'Never' }}
                                         </span>
                                     </div>
                                 </div>
                             </li>
+                            <li v-if="latest_logins.length === 0" class="py-4 text-center text-xs text-gray-400">
+                                No user logins recorded yet.
+                            </li>
                         </ul>
                     </div>
-                </Card>
+                </AppCard>
             </div>
         </div>
 
-        <!-- Recent transactions table card -->
-        <Card title="Recent POS Sessions & Transactions" subtitle="Track real-time checkout activities">
-            <div class="mt-4 overflow-x-auto rounded-xl border border-gray-100 dark:border-gray-800">
-                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-800 bg-white dark:bg-gray-900">
-                    <thead class="bg-gray-50/75 dark:bg-gray-950/50">
-                        <tr>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Invoice No</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Customer</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Items</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Total</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Status</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Time</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-gray-900">
-                        <tr v-for="sale in recent_sales" :key="sale.id">
-                            <td class="whitespace-nowrap px-6 py-4 text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                {{ sale.invoice_no }}
-                            </td>
-                            <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500 dark:text-gray-300">
-                                {{ sale.customer }}
-                            </td>
-                            <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500 dark:text-gray-300">
-                                {{ sale.items }}
-                            </td>
-                            <td class="whitespace-nowrap px-6 py-4 text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                {{ formatMoney(sale.total) }}
-                            </td>
-                            <td class="whitespace-nowrap px-6 py-4 text-sm">
-                                <span
-                                    class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
-                                    :class="[
-                                        sale.status === 'Paid'
-                                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-                                    ]"
-                                >
-                                    {{ sale.status }}
-                                </span>
-                            </td>
-                            <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-400">
-                                {{ sale.time }}
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+        <!-- Recent Activities Card -->
+        <AppCard title="Recent Audits & Operations Logs" subtitle="Track user actions, changes to settings, or modifications to accounts.">
+            <div class="mt-4">
+                <AppTable :headers="['Trigger Time', 'Trigger User', 'Action Description', 'IP Address', 'Browser/User-Agent']">
+                    <tr v-for="act in recent_activities" :key="act.id" class="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
+                        <td class="px-6 py-4 text-xs text-gray-500 whitespace-nowrap">
+                            {{ formatTime(act.timestamp) }}
+                        </td>
+                        <td class="px-6 py-4 text-xs font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                            {{ act.user }}
+                        </td>
+                        <td class="px-6 py-4 text-xs text-gray-600 dark:text-gray-300">
+                            {{ act.action }}
+                        </td>
+                        <td class="px-6 py-4 text-xs text-gray-500 font-mono whitespace-nowrap">
+                            {{ act.ip }}
+                        </td>
+                        <td class="px-6 py-4 text-xs text-gray-400 max-w-xs truncate whitespace-nowrap">
+                            {{ act.browser }}
+                        </td>
+                    </tr>
+                    <tr v-if="recent_activities.length === 0">
+                        <td colspan="5" class="py-8 text-center text-xs text-gray-400">
+                            No recent activity recorded yet.
+                        </td>
+                    </tr>
+                </AppTable>
             </div>
-        </Card>
+        </AppCard>
     </AppLayout>
 </template>

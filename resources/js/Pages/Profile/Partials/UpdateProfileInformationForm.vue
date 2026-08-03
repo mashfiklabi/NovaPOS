@@ -4,18 +4,35 @@ import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { Link, useForm, usePage } from '@inertiajs/vue3';
+import { PageProps } from '@/types';
 
 defineProps<{
     mustVerifyEmail?: Boolean;
     status?: String;
 }>();
 
-const user = usePage().props.auth.user;
+const user = usePage<PageProps>().props.auth.user;
 
 const form = useForm({
+    _method: 'PATCH',
     name: user.name,
     email: user.email,
+    phone: user.phone || '',
+    avatar: null as File | null,
 });
+
+const handleFile = (event: Event) => {
+    const files = (event.target as HTMLInputElement).files;
+    if (files && files.length > 0) {
+        form.avatar = files[0];
+    }
+};
+
+const submit = () => {
+    form.post(route('profile.update'), {
+        preserveScroll: true,
+    });
+};
 </script>
 
 <template>
@@ -26,14 +43,32 @@ const form = useForm({
             </h2>
 
             <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                Update your account's profile information and email address.
+                Update your account's profile information, avatar photo, and contact number.
             </p>
         </header>
 
         <form
-            @submit.prevent="form.patch(route('profile.update'))"
+            @submit.prevent="submit"
             class="mt-6 space-y-6"
         >
+            <!-- Current avatar preview -->
+            <div class="flex items-center space-x-4">
+                <div class="h-16 w-16 bg-gray-150 border border-gray-200 dark:bg-gray-800 dark:border-gray-700 rounded-full flex items-center justify-center font-bold text-gray-700 dark:text-gray-300 text-lg">
+                    <img v-if="user.avatar" :src="`/storage/${user.avatar}`" class="h-16 w-16 rounded-full object-cover" />
+                    <span v-else>{{ user.name.charAt(0) }}</span>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Upload New Avatar Photo</label>
+                    <input
+                        type="file"
+                        accept="image/*"
+                        @change="handleFile"
+                        class="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                    />
+                    <InputError class="mt-2" :message="form.errors.avatar" />
+                </div>
+            </div>
+
             <div>
                 <InputLabel for="name" value="Name" />
 
@@ -63,6 +98,19 @@ const form = useForm({
                 />
 
                 <InputError class="mt-2" :message="form.errors.email" />
+            </div>
+
+            <div>
+                <InputLabel for="phone" value="Phone Number" />
+
+                <TextInput
+                    id="phone"
+                    type="text"
+                    class="mt-1 block w-full"
+                    v-model="form.phone"
+                />
+
+                <InputError class="mt-2" :message="form.errors.phone" />
             </div>
 
             <div v-if="mustVerifyEmail && user.email_verified_at === null">

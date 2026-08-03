@@ -1,23 +1,22 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
-use Database\Factories\UserFactory;
+use App\Enums\UserStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
-
-    // Status Constants
-    public const STATUS_ACTIVE = 'active';
-    public const STATUS_INACTIVE = 'inactive';
-    public const STATUS_SUSPENDED = 'suspended';
+    use HasFactory, HasRoles, LogsActivity, Notifiable, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -29,7 +28,13 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'avatar',
+        'phone',
         'status',
+        'last_login_at',
+        'created_by',
+        'updated_by',
+        'deleted_by',
     ];
 
     /**
@@ -52,11 +57,24 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'status' => UserStatus::class,
+            'last_login_at' => 'datetime',
         ];
     }
 
     /**
-     * Boot function to automatically generate UUID on creation.
+     * Configure the activity logging options.
+     */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logAll()
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
+
+    /**
+     * Boot function to automatically generate UUID and audit IDs on creation.
      */
     protected static function boot(): void
     {
@@ -66,68 +84,22 @@ class User extends Authenticatable
             if (empty($user->uuid)) {
                 $user->uuid = (string) Str::uuid();
             }
-        });
-    }
-
-    /**
-     * Roles relationship.
-     */
-    public function roles(): BelongsToMany
-    {
-        return $this->belongsToMany(Role::class, 'user_role', 'user_id', 'role_id');
-    }
-
-    /**
-     * Check if user has a specific role.
-     */
-    public function hasRole(string $roleName): bool
-    {
-        return $this->roles->contains('name', $roleName);
-    }
-
-    /**
-     * Check if user has any of the specified roles.
-     */
-    public function hasAnyRole(string ...$roles): bool
-    {
-        return $this->roles->pluck('name')->intersect($roles)->isNotEmpty();
-    }
-
-    /**
-     * Check if user has a specific permission (via roles).
-     */
-    public function hasPermission(string $permissionName): bool
-    {
-        // Admin always has all permissions
-        if ($this->hasRole('Admin')) {
-            return true;
-        }
-
-        foreach ($this->roles as $role) {
-            if ($role->permissions->contains('name', $permissionName)) {
-                return true;
+            if (auth()->check()) {
+                $user->created_by = auth()->id();
             }
-        }
+        });
 
-        return false;
-    }
+        static::updating(function (User $user) {
+            if (auth()->check()) {
+                $user->updated_by = auth()->id();
+            }
+        });
 
-    /**
-     * Get all permission names for the user.
-     *
-     * @return array<string>
-     */
-    public function getPermissionNames(): array
-    {
-        if ($this->hasRole('Admin')) {
-            return Permission::pluck('name')->toArray();
-        }
-
-        $permissions = collect();
-        foreach ($this->roles as $role) {
-            $permissions = $permissions->merge($role->permissions->pluck('name'));
-        }
-
-        return $permissions->unique()->toArray();
+        static::deleting(function (User $user) {
+            if (auth()->check()) {
+                $user->deleted_by = auth()->id();
+                $user->saveQuietly();
+            }
+        });
     }
 }

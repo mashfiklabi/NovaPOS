@@ -1,27 +1,28 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services;
 
 use App\Models\Setting;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class SettingService
 {
-    public function __construct(
-        protected AuditLogService $auditLogService
-    ) {}
-
     /**
      * Get a setting by key.
      */
     public function get(string $key, ?string $default = null): ?string
     {
         $setting = Setting::where('key', $key)->first();
+
         return $setting ? $setting->value : $default;
     }
 
     /**
-     * Get all settings as key-value pairs.
+     * Get all settings mapped by key.
      *
      * @return array<string, string|null>
      */
@@ -31,30 +32,45 @@ class SettingService
     }
 
     /**
+     * Get settings grouped by their group field.
+     *
+     * @return array<string, array<Setting>>
+     */
+    public function getGrouped(): array
+    {
+        return Setting::all()->groupBy('group')->toArray();
+    }
+
+    /**
      * Set multiple settings.
      *
-     * @param array<string, string|null> $settings
+     * @param  array<string, mixed>  $settings
      */
     public function setMany(array $settings): void
     {
         DB::transaction(function () use ($settings) {
             foreach ($settings as $key => $value) {
-                // Ignore tokens or files like logos/favicons that are handled separately, or store string path
-                $setting = Setting::firstOrCreate(['key' => $key]);
+                // If value is an uploaded file (like Logo or Favicon)
+                if ($value instanceof UploadedFile) {
+                    $setting = Setting::where('key', $key)->first();
+                    if ($setting && $setting->value) {
+                        Storage::disk('public')->delete($setting->value);
+                    }
+                    $value = $value->store('settings', 'public');
+                }
 
-                $oldValue = $setting->value;
+                $setting = Setting::where('key', $key)->first();
+                if ($setting) {
+                    $oldValue = $setting->value;
+                    if ($oldValue !== $value) {
+                        $setting->value = $value;
+                        $setting->save();
 
-                if ($oldValue !== $value) {
-                    $setting->value = $value;
-                    $setting->save();
-
-                    $this->auditLogService->log(
-                        action: 'setting_updated',
-                        modelType: Setting::class,
-                        modelId: $setting->id,
-                        oldValues: ['key' => $key, 'value' => $oldValue],
-                        newValues: ['key' => $key, 'value' => $value]
-                    );
+                        activity()
+                            ->performedOn($setting)
+                            ->event('updated')
+                            ->log("Updated system setting: {$key}");
+                    }
                 }
             }
         });

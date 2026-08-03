@@ -1,6 +1,8 @@
 <?php
 
-use App\Http\Controllers\AuditLogController;
+declare(strict_types=1);
+
+use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RoleController;
@@ -22,7 +24,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Dashboard Route
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    // Users Management Routes
+    // Users Management Routes (using standard resource routing)
     Route::apiResource('users', UserController::class)->except(['show', 'create', 'edit']);
     Route::get('/users', [UserController::class, 'index'])->name('users.index');
 
@@ -32,10 +34,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // System Settings Routes
     Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
+    // POST request handles the multipart/form-data for Logo/Favicon file uploading
     Route::post('/settings', [SettingController::class, 'update'])->name('settings.update');
 
-    // Audit Logs Viewer Routes
-    Route::get('/audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
+    // Activity Logs Viewer Routes
+    Route::get('/activity-logs', [ActivityLogController::class, 'index'])->name('activity-logs.index');
 
     // User Profile Routes
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
