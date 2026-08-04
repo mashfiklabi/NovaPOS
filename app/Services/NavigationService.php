@@ -28,14 +28,10 @@ class NavigationService
             return $items;
         }
 
-        // Cache loaded permission names to avoid N+1 queries during filter
-        static $seededPermissions = null;
-        if ($seededPermissions === null) {
-            try {
-                $seededPermissions = Permission::pluck('name')->toArray();
-            } catch (\Exception $e) {
-                $seededPermissions = [];
-            }
+        try {
+            $seededPermissions = Permission::pluck('name')->toArray();
+        } catch (\Exception $e) {
+            $seededPermissions = [];
         }
 
         return array_values(array_filter($items, function (array $item) use ($user, $seededPermissions) {

@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import { PageProps } from '@/types';
+import Heroicon from '@/Components/Heroicon.vue';
 
 // Get page props with full type safety
 const page = usePage<PageProps>();
@@ -54,7 +55,7 @@ const isRouteActive = (route_name: string) => {
                             : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800/50 dark:hover:text-gray-200'
                     ]"
                 >
-                    <span v-html="item.icon" class="shrink-0" />
+                    <Heroicon :name="item.icon" class="shrink-0 h-5 w-5" />
                     <span>{{ item.title }}</span>
                 </Link>
             </nav>
@@ -111,7 +112,7 @@ const isRouteActive = (route_name: string) => {
                         ]"
                         @click="isMobileSidebarOpen = false"
                     >
-                        <span v-html="item.icon" class="shrink-0" />
+                        <Heroicon :name="item.icon" class="shrink-0 h-5 w-5" />
                         <span>{{ item.title }}</span>
                     </Link>
                 </nav>

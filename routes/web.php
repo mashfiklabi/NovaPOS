@@ -26,10 +26,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     // Users Management Module
-    Route::apiResource('users', UserController::class)->except(['show', 'create', 'edit']);
+    Route::resource('users', UserController::class)->except(['create', 'edit', 'show']);
 
     // Roles & Permissions Module
-    Route::apiResource('roles', RoleController::class)->except(['show', 'create', 'edit']);
+    Route::resource('roles', RoleController::class)->except(['create', 'edit', 'show']);
 
     // System Settings Module
     Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');
