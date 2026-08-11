@@ -41,6 +41,30 @@ class DatabaseSeeder extends Seeder
             'roles.delete' => 'Ability to remove user roles',
 
             'permissions.view' => 'Ability to list system-level permissions',
+
+            // Master Data - Categories
+            'categories.view' => 'Ability to view categories',
+            'categories.create' => 'Ability to create categories',
+            'categories.update' => 'Ability to update categories',
+            'categories.delete' => 'Ability to delete categories',
+
+            // Master Data - Brands
+            'brands.view' => 'Ability to view brands',
+            'brands.create' => 'Ability to create brands',
+            'brands.update' => 'Ability to update brands',
+            'brands.delete' => 'Ability to delete brands',
+
+            // Master Data - Units
+            'units.view' => 'Ability to view units',
+            'units.create' => 'Ability to create units',
+            'units.update' => 'Ability to update units',
+            'units.delete' => 'Ability to delete units',
+
+            // Master Data - Products
+            'products.view' => 'Ability to view products',
+            'products.create' => 'Ability to create products',
+            'products.update' => 'Ability to update products',
+            'products.delete' => 'Ability to delete products',
         ];
 
         foreach ($permissions as $name => $description) {
@@ -53,18 +77,34 @@ class DatabaseSeeder extends Seeder
         // Super Admin gets all permissions assigned
         $superAdminRole->syncPermissions(array_keys($permissions));
 
-        // Let's create some other roles for demo purposes (e.g. Manager, Cashier)
+        // Store Manager Role
         $managerRole = Role::findOrCreate('Manager', 'web');
         $managerRole->syncPermissions([
             'dashboard.view',
             'users.view',
             'users.create',
             'users.update',
+            'categories.view',
+            'categories.create',
+            'categories.update',
+            'brands.view',
+            'brands.create',
+            'brands.update',
+            'units.view',
+            'units.create',
+            'units.update',
+            'products.view',
+            'products.create',
+            'products.update',
         ]);
 
         $cashierRole = Role::findOrCreate('Cashier', 'web');
         $cashierRole->syncPermissions([
             'dashboard.view',
+            'categories.view',
+            'brands.view',
+            'units.view',
+            'products.view',
         ]);
 
         // 3. Seed Default Super Admin User
@@ -168,5 +208,100 @@ class DatabaseSeeder extends Seeder
         foreach ($settings as $item) {
             Setting::create($item);
         }
+
+        // 5. Seed some basic Category, Brand, and Unit values for easier setup
+        \DB::table('categories')->insert([
+            [
+                'id' => 1,
+                'uuid' => (string) Str::uuid(),
+                'name' => 'Electronics',
+                'slug' => 'electronics',
+                'description' => 'Electronic gadgets and devices',
+                'parent_id' => null,
+                'status' => 'active',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'id' => 2,
+                'uuid' => (string) Str::uuid(),
+                'name' => 'Apparel',
+                'slug' => 'apparel',
+                'description' => 'Clothing and wearable items',
+                'parent_id' => null,
+                'status' => 'active',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        \DB::table('brands')->insert([
+            [
+                'id' => 1,
+                'uuid' => (string) Str::uuid(),
+                'name' => 'Logitech',
+                'slug' => 'logitech',
+                'description' => 'Premium peripherals manufacturer',
+                'logo' => null,
+                'status' => 'active',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'id' => 2,
+                'uuid' => (string) Str::uuid(),
+                'name' => 'Nike',
+                'slug' => 'nike',
+                'description' => 'Athletic apparel and shoes',
+                'logo' => null,
+                'status' => 'active',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        \DB::table('units')->insert([
+            [
+                'id' => 1,
+                'uuid' => (string) Str::uuid(),
+                'name' => 'Pieces',
+                'short_name' => 'pcs',
+                'allow_decimal' => 'disallowed',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'id' => 2,
+                'uuid' => (string) Str::uuid(),
+                'name' => 'Kilograms',
+                'short_name' => 'kg',
+                'allow_decimal' => 'allowed',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        \DB::table('products')->insert([
+            [
+                'id' => 1,
+                'uuid' => (string) Str::uuid(),
+                'name' => 'MX Master 3S Mouse',
+                'slug' => 'mx-master-3s-mouse',
+                'sku' => 'LOGI-MX3S-01',
+                'barcode' => '097855178946',
+                'description' => 'Logitech ergonomic office and creator wireless mouse',
+                'category_id' => 1,
+                'brand_id' => 1,
+                'unit_id' => 1,
+                'cost_price' => 75.00,
+                'selling_price' => 99.99,
+                'stock_alert_threshold' => 5.000,
+                'current_stock' => 12.000,
+                'image' => null,
+                'status' => 'active',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
     }
 }

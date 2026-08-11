@@ -10,6 +10,30 @@ return [
         'permission' => 'dashboard.view',
     ],
     [
+        'title' => 'Products',
+        'route' => 'products.index',
+        'icon' => 'ArchiveBoxIcon',
+        'permission' => 'products.view',
+    ],
+    [
+        'title' => 'Categories',
+        'route' => 'categories.index',
+        'icon' => 'TagIcon',
+        'permission' => 'categories.view',
+    ],
+    [
+        'title' => 'Brands',
+        'route' => 'brands.index',
+        'icon' => 'Squares2X2Icon',
+        'permission' => 'brands.view',
+    ],
+    [
+        'title' => 'Units',
+        'route' => 'units.index',
+        'icon' => 'ScaleIcon',
+        'permission' => 'units.view',
+    ],
+    [
         'title' => 'Users',
         'route' => 'users.index',
         'icon' => 'UsersIcon',
