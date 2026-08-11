@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue';
+import { ref, watch } from 'vue';
 import { Head, useForm, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AppCard from '@/Components/AppCard.vue';
@@ -47,14 +47,9 @@ interface Product {
     current_stock: string;
     image: string | null;
     status: string;
-    track_stock: boolean;
-    allow_decimal: boolean;
-    tax_type: 'exclusive' | 'inclusive' | 'none';
-    tax_rate: string | null;
     category: Category | null;
     brand: Brand | null;
     unit: Unit;
-    deleted_at: string | null;
 }
 
 const props = defineProps<{
@@ -67,28 +62,17 @@ const props = defineProps<{
     units: Unit[];
     filters: {
         search: string | null;
-        status: string | null;
     };
 }>();
 
 const search = ref(props.filters.search || '');
-const status = ref(props.filters.status || 'active');
 
 watch(search, (value) => {
-    router.get('/products', { search: value, status: status.value }, {
+    router.get('/products', { search: value }, {
         preserveState: true,
         replace: true,
     });
 });
-
-const setStatus = (val: string) => {
-    status.value = val;
-    selectedIds.value = [];
-    router.get('/products', { search: search.value, status: val }, {
-        preserveState: true,
-        replace: true,
-    });
-};
 
 const isDrawerOpen = ref(false);
 const editingProduct = ref<Product | null>(null);
@@ -108,10 +92,6 @@ const form = useForm({
     current_stock: '0.000',
     image: null as File | null,
     status: 'active',
-    track_stock: '1' as string | number,
-    allow_decimal: '0' as string | number,
-    tax_type: 'none',
-    tax_rate: '0.00',
 });
 
 const handleFile = (event: Event) => {
@@ -134,10 +114,6 @@ const openCreateDrawer = () => {
     form.selling_price = '';
     form.stock_alert_threshold = '0.000';
     form.current_stock = '0.000';
-    form.track_stock = '1';
-    form.allow_decimal = '0';
-    form.tax_type = 'none';
-    form.tax_rate = '0.00';
     isDrawerOpen.value = true;
 };
 
@@ -157,10 +133,6 @@ const openEditDrawer = (product: Product) => {
     form.stock_alert_threshold = product.stock_alert_threshold;
     form.current_stock = product.current_stock;
     form.status = product.status;
-    form.track_stock = product.track_stock ? '1' : '0';
-    form.allow_decimal = product.allow_decimal ? '1' : '0';
-    form.tax_type = product.tax_type;
-    form.tax_rate = product.tax_rate ? String(product.tax_rate) : '0.00';
     form.image = null;
     isDrawerOpen.value = true;
 };
@@ -184,10 +156,6 @@ const submit = () => {
         normalised.selling_price = Number(normalised.selling_price);
         normalised.stock_alert_threshold = Number(normalised.stock_alert_threshold);
         normalised.current_stock = Number(normalised.current_stock);
-        normalised.track_stock = normalised.track_stock === '1' ? 1 : 0;
-        normalised.allow_decimal = normalised.allow_decimal === '1' ? 1 : 0;
-        normalised.tax_type = String(normalised.tax_type);
-        normalised.tax_rate = normalised.tax_type === 'none' ? 0.00 : Number(normalised.tax_rate);
 
         if (editingProduct.value) {
             normalised._method = 'PUT';
@@ -216,68 +184,6 @@ const formatStock = (value: string, shortName: string) => {
     const formattedVal = Number(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
     return `${formattedVal} ${shortName}`;
 };
-
-// --- BULK OPERATIONS & SOFT RESTORES ---
-const selectedIds = ref<number[]>([]);
-
-const isAllSelected = computed(() => {
-    if (props.products.data.length === 0) return false;
-    return props.products.data.every(p => selectedIds.value.includes(p.id));
-});
-
-const toggleSelectAll = (event: Event) => {
-    const checked = (event.target as HTMLInputElement).checked;
-    if (checked) {
-        selectedIds.value = props.products.data.map(p => p.id);
-    } else {
-        selectedIds.value = [];
-    }
-};
-
-const toggleSelect = (id: number, event: Event) => {
-    const checked = (event.target as HTMLInputElement).checked;
-    if (checked) {
-        if (!selectedIds.value.includes(id)) {
-            selectedIds.value.push(id);
-        }
-    } else {
-        selectedIds.value = selectedIds.value.filter(item => item !== id);
-    }
-};
-
-const restoreProduct = (product: Product) => {
-    if (confirm(`Are you sure you want to restore product "${product.name}"?`)) {
-        router.post(`/products/${product.id}/restore`, {}, {
-            preserveScroll: true,
-        });
-    }
-};
-
-const bulkDelete = () => {
-    if (confirm(`Are you sure you want to delete ${selectedIds.value.length} selected products?`)) {
-        router.post('/products/bulk-delete', { ids: selectedIds.value }, {
-            onSuccess: () => {
-                selectedIds.value = [];
-            },
-            preserveScroll: true,
-        });
-    }
-};
-
-const bulkRestore = () => {
-    if (confirm(`Are you sure you want to restore ${selectedIds.value.length} selected products?`)) {
-        router.post('/products/bulk-restore', { ids: selectedIds.value }, {
-            onSuccess: () => {
-                selectedIds.value = [];
-            },
-            preserveScroll: true,
-        });
-    }
-};
-
-const exportCsv = () => {
-    window.location.href = `/products/export?status=${status.value}&search=${search.value}`;
-};
 </script>
 
 <template>
@@ -287,63 +193,19 @@ const exportCsv = () => {
         <PageHeader title="Products" :breadcrumbs="[{ name: 'Products' }]">
             <template #actions>
                 <SearchInput v-model="search" placeholder="Search sku, barcode, name..." class="mr-2" />
-                <AppButton variant="secondary" @click="exportCsv" class="mr-2">
-                    Export CSV
-                </AppButton>
                 <AppButton variant="primary" @click="openCreateDrawer">
                     Add Product
                 </AppButton>
             </template>
         </PageHeader>
 
-        <!-- Status Filter Tabs & Bulk Actions Toolbar -->
-        <div class="mb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-150 dark:border-gray-800 shadow-sm">
-            <div class="flex items-center space-x-2">
-                <button
-                    @click="setStatus('active')"
-                    class="px-4 py-2 text-xs font-semibold rounded-lg transition-all duration-150"
-                    :class="[
-                        status === 'active'
-                            ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'
-                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50'
-                    ]"
-                >
-                    All Directories
-                </button>
-                <button
-                    @click="setStatus('trash')"
-                    class="px-4 py-2 text-xs font-semibold rounded-lg transition-all duration-150"
-                    :class="[
-                        status === 'trash'
-                            ? 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50'
-                    ]"
-                >
-                    <span>Trash</span>
-                </button>
-            </div>
-
-            <!-- Bulk actions toolbar -->
-            <div v-if="selectedIds.length > 0" class="flex items-center space-x-3 bg-indigo-50/50 dark:bg-indigo-950/20 px-3 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-900/50">
-                <span class="text-xs font-medium text-indigo-700 dark:text-indigo-400">
-                    {{ selectedIds.length }} Selected
-                </span>
-                <AppButton v-if="status === 'active'" size="sm" variant="danger" @click="bulkDelete">
-                    Bulk Delete
-                </AppButton>
-                <AppButton v-if="status === 'trash'" size="sm" variant="primary" @click="bulkRestore">
-                    Bulk Restore
-                </AppButton>
-            </div>
-        </div>
-
         <AppCard no-padding>
             <div v-if="products.data.length === 0" class="p-6">
                 <EmptyState
-                    :title="status === 'trash' ? 'Trash is empty' : 'No products recorded'"
-                    :description="status === 'trash' ? 'Soft-deleted products will appear here where they can be restored.' : 'Populate your store shelves by introducing products, configuring cost sheets, and defining stock alert triggers.'"
+                    title="No products recorded"
+                    description="Populate your store shelves by introducing products, configuring cost sheets, and defining stock alert triggers."
                 >
-                    <template #actions v-if="status !== 'trash'">
+                    <template #actions>
                         <AppButton variant="primary" @click="openCreateDrawer">
                             Add New Product
                         </AppButton>
@@ -352,16 +214,8 @@ const exportCsv = () => {
             </div>
 
             <div v-else>
-                <AppTable :headers="['', 'Product Detail', 'SKU / Barcode', 'Category & Brand', 'Cost / Retail', 'Stock / Alert', 'Status', 'Actions']">
-                    <tr v-for="product in products.data" :key="product.id" class="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors" :class="{ 'bg-indigo-50/10 dark:bg-indigo-950/5': selectedIds.includes(product.id) }">
-                        <td class="w-10 px-6 py-4 whitespace-nowrap">
-                            <input
-                                type="checkbox"
-                                :checked="selectedIds.includes(product.id)"
-                                @change="toggleSelect(product.id, $event)"
-                                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
-                            />
-                        </td>
+                <AppTable :headers="['Product Detail', 'SKU / Barcode', 'Category & Brand', 'Cost / Retail', 'Stock / Alert', 'Status', 'Actions']">
+                    <tr v-for="product in products.data" :key="product.id" class="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
                         <td class="px-6 py-4 text-sm whitespace-nowrap">
                             <div class="flex items-center space-x-3">
                                 <div class="h-10 w-10 bg-gray-50 dark:bg-gray-900 border border-gray-150 dark:border-gray-800 rounded flex items-center justify-center overflow-hidden">
@@ -414,28 +268,18 @@ const exportCsv = () => {
                             </span>
                         </td>
                         <td class="px-6 py-4 text-sm whitespace-nowrap space-x-3">
-                            <template v-if="status === 'trash'">
-                                <button
-                                    @click="restoreProduct(product)"
-                                    class="text-xs font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
-                                >
-                                    Restore
-                                </button>
-                            </template>
-                            <template v-else>
-                                <button
-                                    @click="openEditDrawer(product)"
-                                    class="text-xs font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
-                                >
-                                    Edit
-                                </button>
-                                <button
-                                    @click="deleteProduct(product)"
-                                    class="text-xs font-semibold text-red-600 hover:text-red-500 dark:text-red-400"
-                                >
-                                    Delete
-                                </button>
-                            </template>
+                            <button
+                                @click="openEditDrawer(product)"
+                                class="text-xs font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                            >
+                                Edit
+                            </button>
+                            <button
+                                @click="deleteProduct(product)"
+                                class="text-xs font-semibold text-red-600 hover:text-red-500 dark:text-red-400"
+                            >
+                                Delete
+                            </button>
                         </td>
                     </tr>
                 </AppTable>
@@ -501,59 +345,6 @@ const exportCsv = () => {
                 <div class="grid grid-cols-2 gap-4">
                     <AppInput label="Initial Inventory Count" type="number" step="0.001" v-model="form.current_stock" :error="form.errors.current_stock" />
                     <AppInput label="Stock Alert Threshold" type="number" step="0.001" v-model="form.stock_alert_threshold" :error="form.errors.stock_alert_threshold" required />
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <AppSelect
-                            label="Track Inventory Stock"
-                            v-model="form.track_stock"
-                            :options="[
-                                { value: '1', label: 'Yes, track stock levels' },
-                                { value: '0', label: 'No, do not track' }
-                            ]"
-                            :error="form.errors.track_stock"
-                            required
-                        />
-                    </div>
-                    <div>
-                        <AppSelect
-                            label="Allow Fractional Stock"
-                            v-model="form.allow_decimal"
-                            :options="[
-                                { value: '0', label: 'No, whole quantities' },
-                                { value: '1', label: 'Yes, allow decimal (e.g. 1.5kg)' }
-                            ]"
-                            :error="form.errors.allow_decimal"
-                            required
-                        />
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <AppSelect
-                            label="Tax Type"
-                            v-model="form.tax_type"
-                            :options="[
-                                { value: 'none', label: 'No Tax' },
-                                { value: 'exclusive', label: 'Tax Exclusive' },
-                                { value: 'inclusive', label: 'Tax Inclusive' }
-                            ]"
-                            :error="form.errors.tax_type"
-                            required
-                        />
-                    </div>
-                    <div v-if="form.tax_type !== 'none'">
-                        <AppInput
-                            label="Tax Rate (%)"
-                            type="number"
-                            step="0.01"
-                            v-model="form.tax_rate"
-                            :error="form.errors.tax_rate"
-                            required
-                        />
-                    </div>
                 </div>
 
                 <div>

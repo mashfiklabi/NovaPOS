@@ -27,24 +27,4 @@ class UnitPolicy
     {
         return $user->hasPermissionTo('units.delete');
     }
-
-    public function restore(User $user): bool
-    {
-        return $user->hasPermissionTo('units.delete');
-    }
-
-    public function bulkDelete(User $user): bool
-    {
-        return $user->hasPermissionTo('units.delete');
-    }
-
-    public function bulkRestore(User $user): bool
-    {
-        return $user->hasPermissionTo('units.delete');
-    }
-
-    public function export(User $user): bool
-    {
-        return $user->hasPermissionTo('units.view');
-    }
 }

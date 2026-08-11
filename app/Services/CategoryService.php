@@ -53,46 +53,4 @@ class CategoryService
             $category->delete();
         });
     }
-
-    /**
-     * Restore a soft-deleted category.
-     */
-    public function restore(Category $category): void
-    {
-        DB::transaction(function () use ($category) {
-            $category->restore();
-        });
-    }
-
-    /**
-     * Bulk soft delete categories.
-     *
-     * @param  array<int>  $ids
-     */
-    public function bulkDelete(array $ids): void
-    {
-        DB::transaction(function () use ($ids) {
-            $categories = Category::whereIn('id', $ids)->get();
-
-            foreach ($categories as $category) {
-                $this->delete($category);
-            }
-        });
-    }
-
-    /**
-     * Bulk restore soft-deleted categories.
-     *
-     * @param  array<int>  $ids
-     */
-    public function bulkRestore(array $ids): void
-    {
-        DB::transaction(function () use ($ids) {
-            $categories = Category::onlyTrashed()->whereIn('id', $ids)->get();
-
-            foreach ($categories as $category) {
-                $category->restore();
-            }
-        });
-    }
 }

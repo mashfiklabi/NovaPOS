@@ -213,46 +213,4 @@ class MasterDataTest extends TestCase
         $response->assertSessionHasErrors();
         $this->assertDatabaseHas('categories', ['id' => $this->category->id]);
     }
-
-    public function test_authorized_user_can_restore_soft_deleted_category(): void
-    {
-        $this->actingAs($this->adminUser)->delete("/categories/{$this->category->id}");
-        $this->assertSoftDeleted('categories', ['id' => $this->category->id]);
-
-        $response = $this->actingAs($this->adminUser)->post("/categories/{$this->category->id}/restore");
-        $response->assertRedirect();
-        $this->assertNotSoftDeleted('categories', ['id' => $this->category->id]);
-    }
-
-    public function test_authorized_user_can_bulk_delete_and_restore_categories(): void
-    {
-        $category2 = Category::create([
-            'name' => 'Home Appliances',
-            'slug' => 'home-appliances',
-            'status' => 'active',
-        ]);
-
-        $response = $this->actingAs($this->adminUser)->post('/categories/bulk-delete', [
-            'ids' => [$this->category->id, $category2->id],
-        ]);
-        $response->assertRedirect();
-        $this->assertSoftDeleted('categories', ['id' => $this->category->id]);
-        $this->assertSoftDeleted('categories', ['id' => $category2->id]);
-
-        $response = $this->actingAs($this->adminUser)->post('/categories/bulk-restore', [
-            'ids' => [$this->category->id, $category2->id],
-        ]);
-        $response->assertRedirect();
-        $this->assertNotSoftDeleted('categories', ['id' => $this->category->id]);
-        $this->assertNotSoftDeleted('categories', ['id' => $category2->id]);
-    }
-
-    public function test_authorized_user_can_export_categories_csv(): void
-    {
-        $response = $this->actingAs($this->adminUser)->get('/categories/export');
-        $response->assertOk();
-        $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
-        $this->assertStringContainsString('Category Name', $response->streamedContent());
-        $this->assertStringContainsString('Electronics', $response->streamedContent());
-    }
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue';
+import { ref, watch } from 'vue';
 import { Head, useForm, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AppCard from '@/Components/AppCard.vue';
@@ -22,7 +22,6 @@ interface Brand {
     description: string | null;
     logo: string | null;
     status: string;
-    deleted_at: string | null;
 }
 
 const props = defineProps<{
@@ -32,28 +31,17 @@ const props = defineProps<{
     };
     filters: {
         search: string | null;
-        status: string | null;
     };
 }>();
 
 const search = ref(props.filters.search || '');
-const status = ref(props.filters.status || 'active');
 
 watch(search, (value) => {
-    router.get('/brands', { search: value, status: status.value }, {
+    router.get('/brands', { search: value }, {
         preserveState: true,
         replace: true,
     });
 });
-
-const setStatus = (val: string) => {
-    status.value = val;
-    selectedIds.value = [];
-    router.get('/brands', { search: search.value, status: val }, {
-        preserveState: true,
-        replace: true,
-    });
-};
 
 const isDrawerOpen = ref(false);
 const editingBrand = ref<Brand | null>(null);
@@ -124,68 +112,6 @@ const deleteBrand = (brand: Brand) => {
         });
     }
 };
-
-// --- BULK OPERATIONS & SOFT RESTORES ---
-const selectedIds = ref<number[]>([]);
-
-const isAllSelected = computed(() => {
-    if (props.brands.data.length === 0) return false;
-    return props.brands.data.every(b => selectedIds.value.includes(b.id));
-});
-
-const toggleSelectAll = (event: Event) => {
-    const checked = (event.target as HTMLInputElement).checked;
-    if (checked) {
-        selectedIds.value = props.brands.data.map(b => b.id);
-    } else {
-        selectedIds.value = [];
-    }
-};
-
-const toggleSelect = (id: number, event: Event) => {
-    const checked = (event.target as HTMLInputElement).checked;
-    if (checked) {
-        if (!selectedIds.value.includes(id)) {
-            selectedIds.value.push(id);
-        }
-    } else {
-        selectedIds.value = selectedIds.value.filter(item => item !== id);
-    }
-};
-
-const restoreBrand = (brand: Brand) => {
-    if (confirm(`Are you sure you want to restore brand "${brand.name}"?`)) {
-        router.post(`/brands/${brand.id}/restore`, {}, {
-            preserveScroll: true,
-        });
-    }
-};
-
-const bulkDelete = () => {
-    if (confirm(`Are you sure you want to delete ${selectedIds.value.length} selected brands?`)) {
-        router.post('/brands/bulk-delete', { ids: selectedIds.value }, {
-            onSuccess: () => {
-                selectedIds.value = [];
-            },
-            preserveScroll: true,
-        });
-    }
-};
-
-const bulkRestore = () => {
-    if (confirm(`Are you sure you want to restore ${selectedIds.value.length} selected brands?`)) {
-        router.post('/brands/bulk-restore', { ids: selectedIds.value }, {
-            onSuccess: () => {
-                selectedIds.value = [];
-            },
-            preserveScroll: true,
-        });
-    }
-};
-
-const exportCsv = () => {
-    window.location.href = `/brands/export?status=${status.value}&search=${search.value}`;
-};
 </script>
 
 <template>
@@ -195,63 +121,19 @@ const exportCsv = () => {
         <PageHeader title="Brands" :breadcrumbs="[{ name: 'Brands' }]">
             <template #actions>
                 <SearchInput v-model="search" placeholder="Search brands..." class="mr-2" />
-                <AppButton variant="secondary" @click="exportCsv" class="mr-2">
-                    Export CSV
-                </AppButton>
                 <AppButton variant="primary" @click="openCreateDrawer">
                     Add Brand
                 </AppButton>
             </template>
         </PageHeader>
 
-        <!-- Status Filter Tabs & Bulk Actions Toolbar -->
-        <div class="mb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-150 dark:border-gray-800 shadow-sm">
-            <div class="flex items-center space-x-2">
-                <button
-                    @click="setStatus('active')"
-                    class="px-4 py-2 text-xs font-semibold rounded-lg transition-all duration-150"
-                    :class="[
-                        status === 'active'
-                            ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'
-                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50'
-                    ]"
-                >
-                    All Directories
-                </button>
-                <button
-                    @click="setStatus('trash')"
-                    class="px-4 py-2 text-xs font-semibold rounded-lg transition-all duration-150"
-                    :class="[
-                        status === 'trash'
-                            ? 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50'
-                    ]"
-                >
-                    <span>Trash</span>
-                </button>
-            </div>
-
-            <!-- Bulk actions toolbar -->
-            <div v-if="selectedIds.length > 0" class="flex items-center space-x-3 bg-indigo-50/50 dark:bg-indigo-950/20 px-3 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-900/50">
-                <span class="text-xs font-medium text-indigo-700 dark:text-indigo-400">
-                    {{ selectedIds.length }} Selected
-                </span>
-                <AppButton v-if="status === 'active'" size="sm" variant="danger" @click="bulkDelete">
-                    Bulk Delete
-                </AppButton>
-                <AppButton v-if="status === 'trash'" size="sm" variant="primary" @click="bulkRestore">
-                    Bulk Restore
-                </AppButton>
-            </div>
-        </div>
-
         <AppCard no-padding>
             <div v-if="brands.data.length === 0" class="p-6">
                 <EmptyState
-                    :title="status === 'trash' ? 'Trash is empty' : 'No manufacturer brands recorded'"
-                    :description="status === 'trash' ? 'Soft-deleted brands will appear here where they can be restored.' : 'Group your retail inventory items by manufacturers and product lines.'"
+                    title="No manufacturer brands recorded"
+                    description="Group your retail inventory items by manufacturers and product lines."
                 >
-                    <template #actions v-if="status !== 'trash'">
+                    <template #actions>
                         <AppButton variant="primary" @click="openCreateDrawer">
                             Create First Brand
                         </AppButton>
@@ -260,16 +142,8 @@ const exportCsv = () => {
             </div>
 
             <div v-else>
-                <AppTable :headers="['', 'Brand Logo', 'Brand Name', 'Description', 'Status', 'Actions']">
-                    <tr v-for="brand in brands.data" :key="brand.id" class="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors" :class="{ 'bg-indigo-50/10 dark:bg-indigo-950/5': selectedIds.includes(brand.id) }">
-                        <td class="w-10 px-6 py-4 whitespace-nowrap">
-                            <input
-                                type="checkbox"
-                                :checked="selectedIds.includes(brand.id)"
-                                @change="toggleSelect(brand.id, $event)"
-                                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
-                            />
-                        </td>
+                <AppTable :headers="['Brand Logo', 'Brand Name', 'Description', 'Status', 'Actions']">
+                    <tr v-for="brand in brands.data" :key="brand.id" class="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
                         <td class="px-6 py-4 text-sm whitespace-nowrap">
                             <div class="h-10 w-16 bg-gray-50 dark:bg-gray-900 border border-gray-150 dark:border-gray-800 rounded flex items-center justify-center overflow-hidden">
                                 <img v-if="brand.logo" :src="`/storage/${brand.logo}`" class="h-full w-full object-contain" />
@@ -295,28 +169,18 @@ const exportCsv = () => {
                             </span>
                         </td>
                         <td class="px-6 py-4 text-sm whitespace-nowrap space-x-3">
-                            <template v-if="status === 'trash'">
-                                <button
-                                    @click="restoreBrand(brand)"
-                                    class="text-xs font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
-                                >
-                                    Restore
-                                </button>
-                            </template>
-                            <template v-else>
-                                <button
-                                    @click="openEditDrawer(brand)"
-                                    class="text-xs font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
-                                >
-                                    Edit
-                                </button>
-                                <button
-                                    @click="deleteBrand(brand)"
-                                    class="text-xs font-semibold text-red-600 hover:text-red-500 dark:text-red-400"
-                                >
-                                    Delete
-                                </button>
-                            </template>
+                            <button
+                                @click="openEditDrawer(brand)"
+                                class="text-xs font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                            >
+                                Edit
+                            </button>
+                            <button
+                                @click="deleteBrand(brand)"
+                                class="text-xs font-semibold text-red-600 hover:text-red-500 dark:text-red-400"
+                            >
+                                Delete
+                            </button>
                         </td>
                     </tr>
                 </AppTable>
