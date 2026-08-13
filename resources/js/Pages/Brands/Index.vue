@@ -61,11 +61,12 @@ const switchTab = (tab: string) => {
 };
 
 // Check permissions
-const pageProps = usePage().props;
 const hasPermission = (permission: string) => {
-    const perms = pageProps.auth?.permissions || [];
-    const roles = pageProps.auth?.user?.roles || [];
-    if (roles.some((r: any) => r.name === 'Super Admin')) {
+    const auth = (usePage().props.auth as any) || {};
+    const user = auth.user || {};
+    const perms = user.permissions || [];
+    const roles = user.roles || [];
+    if (roles.includes('Super Admin')) {
         return true;
     }
     return perms.includes(permission);
