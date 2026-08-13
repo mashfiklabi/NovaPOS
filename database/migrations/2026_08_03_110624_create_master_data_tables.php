@@ -17,7 +17,7 @@ return new class extends Migration
         Schema::create('categories', function (Blueprint $table) {
             $table->id(); // BIGINT primary key
             $table->uuid('uuid')->unique();
-            $table->string('name')->unique();
+            $table->string('name'); // Scoped unique validator handles it
             $table->string('slug')->unique();
             $table->text('description')->nullable();
             $table->foreignId('parent_id')
@@ -25,6 +25,12 @@ return new class extends Migration
                 ->constrained('categories')
                 ->nullOnDelete();
             $table->string('status')->default('active'); // active, inactive
+
+            // Audit Columns
+            $table->foreignId('created_by')->nullable()->index()->constrained('users')->nullOnDelete();
+            $table->foreignId('updated_by')->nullable()->index()->constrained('users')->nullOnDelete();
+            $table->foreignId('deleted_by')->nullable()->index()->constrained('users')->nullOnDelete();
+
             $table->softDeletes();
             $table->timestamps();
         });
@@ -38,6 +44,12 @@ return new class extends Migration
             $table->text('description')->nullable();
             $table->string('logo')->nullable();
             $table->string('status')->default('active'); // active, inactive
+
+            // Audit Columns
+            $table->foreignId('created_by')->nullable()->index()->constrained('users')->nullOnDelete();
+            $table->foreignId('updated_by')->nullable()->index()->constrained('users')->nullOnDelete();
+            $table->foreignId('deleted_by')->nullable()->index()->constrained('users')->nullOnDelete();
+
             $table->softDeletes();
             $table->timestamps();
         });
@@ -49,6 +61,12 @@ return new class extends Migration
             $table->string('name')->unique();
             $table->string('short_name')->unique();
             $table->string('allow_decimal')->default('disallowed'); // allowed, disallowed
+
+            // Audit Columns
+            $table->foreignId('created_by')->nullable()->index()->constrained('users')->nullOnDelete();
+            $table->foreignId('updated_by')->nullable()->index()->constrained('users')->nullOnDelete();
+            $table->foreignId('deleted_by')->nullable()->index()->constrained('users')->nullOnDelete();
+
             $table->softDeletes();
             $table->timestamps();
         });
@@ -79,6 +97,18 @@ return new class extends Migration
             $table->decimal('current_stock', 18, 3)->default(0.000);
             $table->string('image')->nullable();
             $table->string('status')->default('active'); // active, inactive, out_of_stock, discontinued
+
+            // New Sprint 3 Requested Product Columns
+            $table->boolean('track_stock')->default(true);
+            $table->boolean('allow_decimal')->default(false);
+            $table->enum('tax_type', ['exclusive', 'inclusive', 'none'])->default('none');
+            $table->decimal('tax_rate', 18, 2)->nullable()->default(0.00);
+
+            // Audit Columns
+            $table->foreignId('created_by')->nullable()->index()->constrained('users')->nullOnDelete();
+            $table->foreignId('updated_by')->nullable()->index()->constrained('users')->nullOnDelete();
+            $table->foreignId('deleted_by')->nullable()->index()->constrained('users')->nullOnDelete();
+
             $table->softDeletes();
             $table->timestamps();
         });

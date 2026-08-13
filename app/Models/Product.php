@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Str;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -32,6 +31,13 @@ class Product extends Model
         'current_stock',
         'image',
         'status',
+        'track_stock',
+        'allow_decimal',
+        'tax_type',
+        'tax_rate',
+        'created_by',
+        'updated_by',
+        'deleted_by',
     ];
 
     /**
@@ -44,6 +50,9 @@ class Product extends Model
         'selling_price' => 'decimal:2',
         'stock_alert_threshold' => 'decimal:3',
         'current_stock' => 'decimal:3',
+        'track_stock' => 'boolean',
+        'allow_decimal' => 'boolean',
+        'tax_rate' => 'decimal:2',
     ];
 
     /**
@@ -55,27 +64,6 @@ class Product extends Model
             ->logAll()
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
-    }
-
-    /**
-     * Boot function for sluggable name and UUID generation.
-     */
-    protected static function boot(): void
-    {
-        parent::boot();
-
-        static::creating(function (Product $product) {
-            if (empty($product->uuid)) {
-                $product->uuid = (string) Str::uuid();
-            }
-            if (empty($product->slug)) {
-                $product->slug = Str::slug($product->name);
-            }
-        });
-
-        static::updating(function (Product $product) {
-            $product->slug = Str::slug($product->name);
-        });
     }
 
     /**
@@ -100,5 +88,23 @@ class Product extends Model
     public function unit(): BelongsTo
     {
         return $this->belongsTo(Unit::class)->withTrashed();
+    }
+
+    /**
+     * Audit Relations.
+     */
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updater(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    public function deleter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'deleted_by');
     }
 }

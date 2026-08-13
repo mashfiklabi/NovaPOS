@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Str;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -24,6 +23,9 @@ class Category extends Model
         'description',
         'parent_id',
         'status',
+        'created_by',
+        'updated_by',
+        'deleted_by',
     ];
 
     /**
@@ -35,27 +37,6 @@ class Category extends Model
             ->logAll()
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
-    }
-
-    /**
-     * Boot function for sluggable name and UUID generation.
-     */
-    protected static function boot(): void
-    {
-        parent::boot();
-
-        static::creating(function (Category $category) {
-            if (empty($category->uuid)) {
-                $category->uuid = (string) Str::uuid();
-            }
-            if (empty($category->slug)) {
-                $category->slug = Str::slug($category->name);
-            }
-        });
-
-        static::updating(function (Category $category) {
-            $category->slug = Str::slug($category->name);
-        });
     }
 
     /**
@@ -80,5 +61,23 @@ class Category extends Model
     public function products(): HasMany
     {
         return $this->hasMany(Product::class);
+    }
+
+    /**
+     * Audit Relations.
+     */
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updater(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    public function deleter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'deleted_by');
     }
 }

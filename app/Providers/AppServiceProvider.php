@@ -10,6 +10,10 @@ use App\Models\Product;
 use App\Models\Setting;
 use App\Models\Unit;
 use App\Models\User;
+use App\Observers\BrandObserver;
+use App\Observers\CategoryObserver;
+use App\Observers\ProductObserver;
+use App\Observers\UnitObserver;
 use App\Observers\UserObserver;
 use App\Policies\BrandPolicy;
 use App\Policies\CategoryPolicy;
@@ -40,8 +44,12 @@ class AppServiceProvider extends ServiceProvider
     {
         Vite::prefetch(concurrency: 3);
 
-        // Register User model observer
+        // Register model observers
         User::observe(UserObserver::class);
+        Category::observe(CategoryObserver::class);
+        Brand::observe(BrandObserver::class);
+        Unit::observe(UnitObserver::class);
+        Product::observe(ProductObserver::class);
 
         // Explicitly register RBAC & configuration Policies
         Gate::policy(User::class, UserPolicy::class);

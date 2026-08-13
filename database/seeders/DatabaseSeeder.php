@@ -47,24 +47,40 @@ class DatabaseSeeder extends Seeder
             'categories.create' => 'Ability to create categories',
             'categories.update' => 'Ability to update categories',
             'categories.delete' => 'Ability to delete categories',
+            'categories.restore' => 'Ability to restore soft deleted categories',
+            'categories.bulk_delete' => 'Ability to bulk delete categories',
+            'categories.bulk_restore' => 'Ability to bulk restore categories',
+            'categories.export' => 'Ability to export categories to CSV',
 
             // Master Data - Brands
             'brands.view' => 'Ability to view brands',
             'brands.create' => 'Ability to create brands',
             'brands.update' => 'Ability to update brands',
             'brands.delete' => 'Ability to delete brands',
+            'brands.restore' => 'Ability to restore soft deleted brands',
+            'brands.bulk_delete' => 'Ability to bulk delete brands',
+            'brands.bulk_restore' => 'Ability to bulk restore brands',
+            'brands.export' => 'Ability to export brands to CSV',
 
             // Master Data - Units
             'units.view' => 'Ability to view units',
             'units.create' => 'Ability to create units',
             'units.update' => 'Ability to update units',
             'units.delete' => 'Ability to delete units',
+            'units.restore' => 'Ability to restore soft deleted units',
+            'units.bulk_delete' => 'Ability to bulk delete units',
+            'units.bulk_restore' => 'Ability to bulk restore units',
+            'units.export' => 'Ability to export units to CSV',
 
             // Master Data - Products
             'products.view' => 'Ability to view products',
             'products.create' => 'Ability to create products',
             'products.update' => 'Ability to update products',
             'products.delete' => 'Ability to delete products',
+            'products.restore' => 'Ability to restore soft deleted products',
+            'products.bulk_delete' => 'Ability to bulk delete products',
+            'products.bulk_restore' => 'Ability to bulk restore products',
+            'products.export' => 'Ability to export products to CSV',
         ];
 
         foreach ($permissions as $name => $description) {
@@ -84,18 +100,42 @@ class DatabaseSeeder extends Seeder
             'users.view',
             'users.create',
             'users.update',
+
             'categories.view',
             'categories.create',
             'categories.update',
+            'categories.delete',
+            'categories.restore',
+            'categories.bulk_delete',
+            'categories.bulk_restore',
+            'categories.export',
+
             'brands.view',
             'brands.create',
             'brands.update',
+            'brands.delete',
+            'brands.restore',
+            'brands.bulk_delete',
+            'brands.bulk_restore',
+            'brands.export',
+
             'units.view',
             'units.create',
             'units.update',
+            'units.delete',
+            'units.restore',
+            'units.bulk_delete',
+            'units.bulk_restore',
+            'units.export',
+
             'products.view',
             'products.create',
             'products.update',
+            'products.delete',
+            'products.restore',
+            'products.bulk_delete',
+            'products.bulk_restore',
+            'products.export',
         ]);
 
         $cashierRole = Role::findOrCreate('Cashier', 'web');

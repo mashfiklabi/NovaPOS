@@ -33,15 +33,31 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('users', UserController::class)->except(['create', 'edit', 'show']);
 
     // Categories Module
+    Route::get('categories/export', [CategoryController::class, 'export'])->name('categories.export');
+    Route::post('categories/bulk-delete', [CategoryController::class, 'bulkDestroy'])->name('categories.bulk-delete');
+    Route::post('categories/bulk-restore', [CategoryController::class, 'bulkRestore'])->name('categories.bulk-restore');
+    Route::post('categories/{id}/restore', [CategoryController::class, 'restore'])->name('categories.restore');
     Route::resource('categories', CategoryController::class)->except(['create', 'edit', 'show']);
 
     // Brands Module
+    Route::get('brands/export', [BrandController::class, 'export'])->name('brands.export');
+    Route::post('brands/bulk-delete', [BrandController::class, 'bulkDestroy'])->name('brands.bulk-delete');
+    Route::post('brands/bulk-restore', [BrandController::class, 'bulkRestore'])->name('brands.bulk-restore');
+    Route::post('brands/{id}/restore', [BrandController::class, 'restore'])->name('brands.restore');
     Route::resource('brands', BrandController::class)->except(['create', 'edit', 'show']);
 
     // Units Module
+    Route::get('units/export', [UnitController::class, 'export'])->name('units.export');
+    Route::post('units/bulk-delete', [UnitController::class, 'bulkDestroy'])->name('units.bulk-delete');
+    Route::post('units/bulk-restore', [UnitController::class, 'bulkRestore'])->name('units.bulk-restore');
+    Route::post('units/{id}/restore', [UnitController::class, 'restore'])->name('units.restore');
     Route::resource('units', UnitController::class)->except(['create', 'edit', 'show']);
 
     // Products Module
+    Route::get('products/export', [ProductController::class, 'export'])->name('products.export');
+    Route::post('products/bulk-delete', [ProductController::class, 'bulkDestroy'])->name('products.bulk-delete');
+    Route::post('products/bulk-restore', [ProductController::class, 'bulkRestore'])->name('products.bulk-restore');
+    Route::post('products/{id}/restore', [ProductController::class, 'restore'])->name('products.restore');
     Route::resource('products', ProductController::class)->except(['create', 'edit', 'show']);
 
     // Roles & Permissions Module

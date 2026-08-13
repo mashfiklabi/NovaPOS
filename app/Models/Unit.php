@@ -6,9 +6,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Str;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -21,6 +21,9 @@ class Unit extends Model
         'name',
         'short_name',
         'allow_decimal',
+        'created_by',
+        'updated_by',
+        'deleted_by',
     ];
 
     /**
@@ -35,24 +38,28 @@ class Unit extends Model
     }
 
     /**
-     * Boot function for UUID generation.
-     */
-    protected static function boot(): void
-    {
-        parent::boot();
-
-        static::creating(function (Unit $unit) {
-            if (empty($unit->uuid)) {
-                $unit->uuid = (string) Str::uuid();
-            }
-        });
-    }
-
-    /**
      * A unit has many products.
      */
     public function products(): HasMany
     {
         return $this->hasMany(Product::class);
+    }
+
+    /**
+     * Audit Relations.
+     */
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updater(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    public function deleter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'deleted_by');
     }
 }

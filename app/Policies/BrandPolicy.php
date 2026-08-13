@@ -27,4 +27,24 @@ class BrandPolicy
     {
         return $user->hasPermissionTo('brands.delete');
     }
+
+    public function restore(User $user): bool
+    {
+        return $user->hasPermissionTo('brands.restore');
+    }
+
+    public function bulkDelete(User $user): bool
+    {
+        return $user->hasPermissionTo('brands.bulk_delete');
+    }
+
+    public function bulkRestore(User $user): bool
+    {
+        return $user->hasPermissionTo('brands.bulk_restore');
+    }
+
+    public function export(User $user): bool
+    {
+        return $user->hasPermissionTo('brands.export');
+    }
 }

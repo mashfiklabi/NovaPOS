@@ -35,29 +35,21 @@ class MasterDataTest extends TestCase
     {
         parent::setUp();
 
-        // Seed basic permissions
-        Permission::create(['name' => 'categories.view', 'guard_name' => 'web']);
-        Permission::create(['name' => 'categories.create', 'guard_name' => 'web']);
-        Permission::create(['name' => 'categories.update', 'guard_name' => 'web']);
-        Permission::create(['name' => 'categories.delete', 'guard_name' => 'web']);
+        // Seed granular permissions
+        $permissions = [
+            'categories.view', 'categories.create', 'categories.update', 'categories.delete', 'categories.restore', 'categories.bulk_delete', 'categories.bulk_restore', 'categories.export',
+            'brands.view', 'brands.create', 'brands.update', 'brands.delete', 'brands.restore', 'brands.bulk_delete', 'brands.bulk_restore', 'brands.export',
+            'units.view', 'units.create', 'units.update', 'units.delete', 'units.restore', 'units.bulk_delete', 'units.bulk_restore', 'units.export',
+            'products.view', 'products.create', 'products.update', 'products.delete', 'products.restore', 'products.bulk_delete', 'products.bulk_restore', 'products.export',
+        ];
 
-        Permission::create(['name' => 'brands.view', 'guard_name' => 'web']);
-        Permission::create(['name' => 'brands.create', 'guard_name' => 'web']);
-        Permission::create(['name' => 'brands.update', 'guard_name' => 'web']);
-        Permission::create(['name' => 'brands.delete', 'guard_name' => 'web']);
-
-        Permission::create(['name' => 'units.view', 'guard_name' => 'web']);
-        Permission::create(['name' => 'units.create', 'guard_name' => 'web']);
-        Permission::create(['name' => 'units.update', 'guard_name' => 'web']);
-        Permission::create(['name' => 'units.delete', 'guard_name' => 'web']);
-
-        Permission::create(['name' => 'products.view', 'guard_name' => 'web']);
-        Permission::create(['name' => 'products.create', 'guard_name' => 'web']);
-        Permission::create(['name' => 'products.update', 'guard_name' => 'web']);
-        Permission::create(['name' => 'products.delete', 'guard_name' => 'web']);
+        foreach ($permissions as $name) {
+            Permission::findOrCreate($name, 'web');
+        }
 
         // Roles
-        $superAdminRole = Role::create(['name' => 'Super Admin', 'guard_name' => 'web']);
+        $superAdminRole = Role::findOrCreate('Super Admin', 'web');
+        $superAdminRole->syncPermissions($permissions);
 
         $this->adminUser = User::factory()->create(['status' => UserStatus::ACTIVE]);
         $this->adminUser->assignRole($superAdminRole);
@@ -115,6 +107,65 @@ class MasterDataTest extends TestCase
         ]);
 
         $response->assertSessionHasErrors(['parent_id']);
+    }
+
+    public function test_prevent_circular_category_loops(): void
+    {
+        $categoryA = Category::create([
+            'name' => 'A',
+            'slug' => 'a',
+            'status' => 'active',
+        ]);
+
+        $categoryB = Category::create([
+            'name' => 'B',
+            'slug' => 'b',
+            'parent_id' => $categoryA->id,
+            'status' => 'active',
+        ]);
+
+        $categoryC = Category::create([
+            'name' => 'C',
+            'slug' => 'c',
+            'parent_id' => $categoryB->id,
+            'status' => 'active',
+        ]);
+
+        // Attempting to make A a child of C (A -> B -> C -> A) must be rejected
+        $response = $this->actingAs($this->adminUser)->put("/categories/{$categoryA->id}", [
+            'name' => 'A-Updated',
+            'parent_id' => $categoryC->id,
+            'status' => 'active',
+        ]);
+
+        $response->assertSessionHasErrors(['parent_id']);
+    }
+
+    public function test_parent_scoped_category_uniqueness(): void
+    {
+        // Category "Accessories" under Electronics (this->category)
+        Category::create([
+            'name' => 'Accessories',
+            'parent_id' => $this->category->id,
+            'status' => 'active',
+        ]);
+
+        // Creating "Accessories" under Electronics again should fail
+        $response = $this->actingAs($this->adminUser)->post('/categories', [
+            'name' => 'Accessories',
+            'parent_id' => $this->category->id,
+            'status' => 'active',
+        ]);
+        $response->assertSessionHasErrors(['name']);
+
+        // Creating "Accessories" under Root (parent_id = null) should pass
+        $response = $this->actingAs($this->adminUser)->post('/categories', [
+            'name' => 'Accessories',
+            'parent_id' => null,
+            'status' => 'active',
+        ]);
+        $response->assertRedirect();
+        $this->assertDatabaseHas('categories', ['name' => 'Accessories', 'parent_id' => null]);
     }
 
     // ==========================================
@@ -178,12 +229,19 @@ class MasterDataTest extends TestCase
             'current_stock' => 10.000,
             'image' => $img,
             'status' => 'active',
+            'track_stock' => true,
+            'allow_decimal' => false,
+            'tax_type' => 'none',
+            'tax_rate' => 0.00,
         ]);
 
         $response->assertRedirect();
         $product = Product::where('sku', 'MX-MASTER-01')->first();
         $this->assertNotNull($product);
         $this->assertSame('MX Master Mouse', $product->name);
+        $this->assertEquals(1, $product->track_stock);
+        $this->assertEquals(0, $product->allow_decimal);
+        $this->assertSame('none', $product->tax_type);
         Storage::disk('public')->assertExists($product->image);
     }
 
@@ -212,5 +270,47 @@ class MasterDataTest extends TestCase
         // Assert error set in session and category remains in DB
         $response->assertSessionHasErrors();
         $this->assertDatabaseHas('categories', ['id' => $this->category->id]);
+    }
+
+    public function test_authorized_user_can_restore_soft_deleted_category(): void
+    {
+        $this->actingAs($this->adminUser)->delete("/categories/{$this->category->id}");
+        $this->assertSoftDeleted('categories', ['id' => $this->category->id]);
+
+        $response = $this->actingAs($this->adminUser)->post("/categories/{$this->category->id}/restore");
+        $response->assertRedirect();
+        $this->assertNotSoftDeleted('categories', ['id' => $this->category->id]);
+    }
+
+    public function test_authorized_user_can_bulk_delete_and_restore_categories(): void
+    {
+        $category2 = Category::create([
+            'name' => 'Home Appliances',
+            'slug' => 'home-appliances',
+            'status' => 'active',
+        ]);
+
+        $response = $this->actingAs($this->adminUser)->post('/categories/bulk-delete', [
+            'ids' => [$this->category->id, $category2->id],
+        ]);
+        $response->assertRedirect();
+        $this->assertSoftDeleted('categories', ['id' => $this->category->id]);
+        $this->assertSoftDeleted('categories', ['id' => $category2->id]);
+
+        $response = $this->actingAs($this->adminUser)->post('/categories/bulk-restore', [
+            'ids' => [$this->category->id, $category2->id],
+        ]);
+        $response->assertRedirect();
+        $this->assertNotSoftDeleted('categories', ['id' => $this->category->id]);
+        $this->assertNotSoftDeleted('categories', ['id' => $category2->id]);
+    }
+
+    public function test_authorized_user_can_export_categories_csv(): void
+    {
+        $response = $this->actingAs($this->adminUser)->get('/categories/export');
+        $response->assertOk();
+        $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
+        $this->assertStringContainsString('Category Name', $response->streamedContent());
+        $this->assertStringContainsString('Electronics', $response->streamedContent());
     }
 }

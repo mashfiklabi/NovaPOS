@@ -48,4 +48,46 @@ class UnitService
             $unit->delete();
         });
     }
+
+    /**
+     * Restore a soft deleted unit.
+     */
+    public function restore(Unit $unit): void
+    {
+        DB::transaction(function () use ($unit) {
+            $unit->restore();
+        });
+    }
+
+    /**
+     * Bulk soft delete units.
+     *
+     * @param  array<int>  $ids
+     */
+    public function bulkDelete(array $ids): void
+    {
+        DB::transaction(function () use ($ids) {
+            foreach ($ids as $id) {
+                $unit = Unit::find($id);
+                if ($unit) {
+                    $this->delete($unit);
+                }
+            }
+        });
+    }
+
+    /**
+     * Bulk restore soft deleted units.
+     *
+     * @param  array<int>  $ids
+     */
+    public function bulkRestore(array $ids): void
+    {
+        DB::transaction(function () use ($ids) {
+            $units = Unit::onlyTrashed()->whereIn('id', $ids)->get();
+            foreach ($units as $unit) {
+                $unit->restore();
+            }
+        });
+    }
 }

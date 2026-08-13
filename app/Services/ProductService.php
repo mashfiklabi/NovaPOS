@@ -56,4 +56,46 @@ class ProductService
             $product->delete();
         });
     }
+
+    /**
+     * Restore a soft deleted product.
+     */
+    public function restore(Product $product): void
+    {
+        DB::transaction(function () use ($product) {
+            $product->restore();
+        });
+    }
+
+    /**
+     * Bulk soft delete products.
+     *
+     * @param  array<int>  $ids
+     */
+    public function bulkDelete(array $ids): void
+    {
+        DB::transaction(function () use ($ids) {
+            foreach ($ids as $id) {
+                $product = Product::find($id);
+                if ($product) {
+                    $this->delete($product);
+                }
+            }
+        });
+    }
+
+    /**
+     * Bulk restore soft deleted products.
+     *
+     * @param  array<int>  $ids
+     */
+    public function bulkRestore(array $ids): void
+    {
+        DB::transaction(function () use ($ids) {
+            $products = Product::onlyTrashed()->whereIn('id', $ids)->get();
+            foreach ($products as $product) {
+                $product->restore();
+            }
+        });
+    }
 }

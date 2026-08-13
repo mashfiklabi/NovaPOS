@@ -31,6 +31,10 @@ class UpdateProductRequest extends FormRequest
             'current_stock' => 'nullable|numeric|min:0',
             'image' => 'nullable|image|max:2048',
             'status' => 'required|string|in:active,inactive,out_of_stock,discontinued',
+            'track_stock' => 'nullable|boolean',
+            'allow_decimal' => 'nullable|boolean',
+            'tax_type' => 'required|string|in:exclusive,inclusive,none',
+            'tax_rate' => 'required|numeric|min:0',
         ];
     }
 }

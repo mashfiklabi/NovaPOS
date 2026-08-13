@@ -40,7 +40,6 @@ class CategoryService
      */
     public function delete(Category $category): void
     {
-        // Prevent deletion of categories with subcategories or products to enforce database integrity.
         if ($category->children()->count() > 0) {
             throw new \InvalidArgumentException('Cannot delete a category containing subcategories.');
         }
@@ -51,6 +50,48 @@ class CategoryService
 
         DB::transaction(function () use ($category) {
             $category->delete();
+        });
+    }
+
+    /**
+     * Restore a soft deleted category.
+     */
+    public function restore(Category $category): void
+    {
+        DB::transaction(function () use ($category) {
+            $category->restore();
+        });
+    }
+
+    /**
+     * Bulk soft delete categories.
+     *
+     * @param  array<int>  $ids
+     */
+    public function bulkDelete(array $ids): void
+    {
+        DB::transaction(function () use ($ids) {
+            foreach ($ids as $id) {
+                $category = Category::find($id);
+                if ($category) {
+                    $this->delete($category);
+                }
+            }
+        });
+    }
+
+    /**
+     * Bulk restore soft deleted categories.
+     *
+     * @param  array<int>  $ids
+     */
+    public function bulkRestore(array $ids): void
+    {
+        DB::transaction(function () use ($ids) {
+            $categories = Category::onlyTrashed()->whereIn('id', $ids)->get();
+            foreach ($categories as $category) {
+                $category->restore();
+            }
         });
     }
 }

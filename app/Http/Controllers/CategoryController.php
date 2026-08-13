@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Helpers\CsvExporter;
 use App\Http\Requests\StoreCategoryRequest;
 use App\Http\Requests\UpdateCategoryRequest;
 use App\Models\Category;
@@ -12,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CategoryController extends Controller
 {
@@ -27,12 +29,18 @@ class CategoryController extends Controller
         $this->authorize('viewAny', Category::class);
 
         $search = $request->input('search');
+        $status = $request->input('status', 'active'); // active, trash
 
-        $categories = Category::with('parent')
-            ->when($search, function ($query, $search) {
-                $query->where('name', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
-            })
+        $query = Category::with('parent');
+
+        if ($status === 'trash') {
+            $query->onlyTrashed();
+        }
+
+        $categories = $query->when($search, function ($q, $search) {
+            $q->where('name', 'like', "%{$search}%")
+                ->orWhere('description', 'like', "%{$search}%");
+        })
             ->orderBy('id', 'desc')
             ->paginate(10)
             ->withQueryString();
@@ -47,6 +55,7 @@ class CategoryController extends Controller
             'parentCategories' => $parentCategories,
             'filters' => [
                 'search' => $search,
+                'status' => $status,
             ],
         ]);
     }
@@ -89,5 +98,93 @@ class CategoryController extends Controller
         } catch (\InvalidArgumentException $e) {
             return redirect()->back()->withErrors(['error' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * Restore the specified soft deleted category.
+     */
+    public function restore(int $id): RedirectResponse
+    {
+        $category = Category::onlyTrashed()->findOrFail($id);
+        $this->authorize('restore', $category);
+
+        $this->categoryService->restore($category);
+
+        return redirect()->back()->with('success', 'Category restored successfully.');
+    }
+
+    /**
+     * Bulk soft delete categories.
+     */
+    public function bulkDestroy(Request $request): RedirectResponse
+    {
+        $this->authorize('bulkDelete', Category::class);
+
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'required|integer|exists:categories,id',
+        ]);
+
+        try {
+            $this->categoryService->bulkDelete($request->input('ids'));
+
+            return redirect()->back()->with('success', 'Selected categories deleted successfully.');
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Bulk restore categories.
+     */
+    public function bulkRestore(Request $request): RedirectResponse
+    {
+        $this->authorize('bulkRestore', Category::class);
+
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'required|integer',
+        ]);
+
+        $this->categoryService->bulkRestore($request->input('ids'));
+
+        return redirect()->back()->with('success', 'Selected categories restored successfully.');
+    }
+
+    /**
+     * Export categories as CSV.
+     */
+    public function export(): StreamedResponse
+    {
+        $this->authorize('export', Category::class);
+
+        $headers = [
+            'ID',
+            'Category Name',
+            'Slug',
+            'Description',
+            'Parent Category',
+            'Status',
+            'Created At',
+        ];
+
+        $query = Category::with('parent')->orderBy('id', 'asc');
+
+        return CsvExporter::streamDownload(
+            'categories_export_'.now()->format('Y_m_d_His').'.csv',
+            $headers,
+            $query,
+            function (Category $category) {
+                return [
+                    $category->id,
+                    $category->name,
+                    $category->slug,
+                    $category->description ?? '',
+                    $category->parent ? $category->parent->name : 'None',
+                    $category->status,
+                    $category->created_at ? $category->created_at->toIso8601String() : '',
+                ];
+            }
+        );
     }
 }

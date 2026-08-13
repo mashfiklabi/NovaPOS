@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Helpers\CsvExporter;
 use App\Http\Requests\StoreUnitRequest;
 use App\Http\Requests\UpdateUnitRequest;
 use App\Models\Unit;
@@ -12,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class UnitController extends Controller
 {
@@ -27,9 +29,16 @@ class UnitController extends Controller
         $this->authorize('viewAny', Unit::class);
 
         $search = $request->input('search');
+        $status = $request->input('status', 'active'); // active, trash
 
-        $units = Unit::when($search, function ($query, $search) {
-            $query->where('name', 'like', "%{$search}%")
+        $query = Unit::query();
+
+        if ($status === 'trash') {
+            $query->onlyTrashed();
+        }
+
+        $units = $query->when($search, function ($q, $search) {
+            $q->where('name', 'like', "%{$search}%")
                 ->orWhere('short_name', 'like', "%{$search}%");
         })
             ->orderBy('id', 'desc')
@@ -40,6 +49,7 @@ class UnitController extends Controller
             'units' => $units,
             'filters' => [
                 'search' => $search,
+                'status' => $status,
             ],
         ]);
     }
@@ -82,5 +92,89 @@ class UnitController extends Controller
         } catch (\InvalidArgumentException $e) {
             return redirect()->back()->withErrors(['error' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * Restore the specified soft deleted unit.
+     */
+    public function restore(int $id): RedirectResponse
+    {
+        $unit = Unit::onlyTrashed()->findOrFail($id);
+        $this->authorize('restore', $unit);
+
+        $this->unitService->restore($unit);
+
+        return redirect()->back()->with('success', 'Unit restored successfully.');
+    }
+
+    /**
+     * Bulk soft delete units.
+     */
+    public function bulkDestroy(Request $request): RedirectResponse
+    {
+        $this->authorize('bulkDelete', Unit::class);
+
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'required|integer|exists:units,id',
+        ]);
+
+        try {
+            $this->unitService->bulkDelete($request->input('ids'));
+
+            return redirect()->back()->with('success', 'Selected units deleted successfully.');
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Bulk restore units.
+     */
+    public function bulkRestore(Request $request): RedirectResponse
+    {
+        $this->authorize('bulkRestore', Unit::class);
+
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'required|integer',
+        ]);
+
+        $this->unitService->bulkRestore($request->input('ids'));
+
+        return redirect()->back()->with('success', 'Selected units restored successfully.');
+    }
+
+    /**
+     * Export units as CSV.
+     */
+    public function export(): StreamedResponse
+    {
+        $this->authorize('export', Unit::class);
+
+        $headers = [
+            'ID',
+            'Unit Name',
+            'Short Name',
+            'Allow Decimal',
+            'Created At',
+        ];
+
+        $query = Unit::query()->orderBy('id', 'asc');
+
+        return CsvExporter::streamDownload(
+            'units_export_'.now()->format('Y_m_d_His').'.csv',
+            $headers,
+            $query,
+            function (Unit $unit) {
+                return [
+                    $unit->id,
+                    $unit->name,
+                    $unit->short_name,
+                    $unit->allow_decimal,
+                    $unit->created_at ? $unit->created_at->toIso8601String() : '',
+                ];
+            }
+        );
     }
 }

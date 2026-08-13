@@ -60,4 +60,46 @@ class BrandService
             $brand->delete();
         });
     }
+
+    /**
+     * Restore a soft deleted brand.
+     */
+    public function restore(Brand $brand): void
+    {
+        DB::transaction(function () use ($brand) {
+            $brand->restore();
+        });
+    }
+
+    /**
+     * Bulk soft delete brands.
+     *
+     * @param  array<int>  $ids
+     */
+    public function bulkDelete(array $ids): void
+    {
+        DB::transaction(function () use ($ids) {
+            foreach ($ids as $id) {
+                $brand = Brand::find($id);
+                if ($brand) {
+                    $this->delete($brand);
+                }
+            }
+        });
+    }
+
+    /**
+     * Bulk restore soft deleted brands.
+     *
+     * @param  array<int>  $ids
+     */
+    public function bulkRestore(array $ids): void
+    {
+        DB::transaction(function () use ($ids) {
+            $brands = Brand::onlyTrashed()->whereIn('id', $ids)->get();
+            foreach ($brands as $brand) {
+                $brand->restore();
+            }
+        });
+    }
 }

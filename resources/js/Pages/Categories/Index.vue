@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
-import { Head, useForm, router } from '@inertiajs/vue3';
+import { ref, watch, computed } from 'vue';
+import { Head, useForm, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AppCard from '@/Components/AppCard.vue';
 import PageHeader from '@/Components/PageHeader.vue';
@@ -26,6 +26,7 @@ interface Category {
         id: number;
         name: string;
     } | null;
+    deleted_at?: string | null;
 }
 
 interface ParentCategoryOption {
@@ -41,18 +42,70 @@ const props = defineProps<{
     parentCategories: ParentCategoryOption[];
     filters: {
         search: string | null;
+        status?: string;
     };
 }>();
 
 const search = ref(props.filters.search || '');
+const activeTab = ref(props.filters.status || 'active'); // active, trash
 
-watch(search, (value) => {
-    router.get('/categories', { search: value }, {
+// Sync with router
+const updateFilters = () => {
+    router.get('/categories', {
+        search: search.value || undefined,
+        status: activeTab.value,
+    }, {
         preserveState: true,
         replace: true,
     });
+};
+
+watch(search, () => {
+    updateFilters();
 });
 
+const switchTab = (tab: string) => {
+    activeTab.value = tab;
+    selectedIds.value = [];
+    updateFilters();
+};
+
+// Check permissions
+const pageProps = usePage().props;
+const hasPermission = (permission: string) => {
+    const perms = pageProps.auth?.permissions || [];
+    const roles = pageProps.auth?.user?.roles || [];
+    if (roles.some((r: any) => r.name === 'Super Admin')) {
+        return true;
+    }
+    return perms.includes(permission);
+};
+
+// Multi-select handling
+const selectedIds = ref<number[]>([]);
+
+const isAllSelected = computed(() => {
+    return props.categories.data.length > 0 && selectedIds.value.length === props.categories.data.length;
+});
+
+const toggleSelectAll = () => {
+    if (isAllSelected.value) {
+        selectedIds.value = [];
+    } else {
+        selectedIds.value = props.categories.data.map(c => c.id);
+    }
+};
+
+const toggleSelectOne = (id: number) => {
+    const index = selectedIds.value.indexOf(id);
+    if (index > -1) {
+        selectedIds.value.splice(index, 1);
+    } else {
+        selectedIds.value.push(id);
+    }
+};
+
+// Actions
 const isDrawerOpen = ref(false);
 const editingCategory = ref<Category | null>(null);
 
@@ -100,12 +153,23 @@ const submit = () => {
     if (editingCategory.value) {
         router.put(`/categories/${editingCategory.value.id}`, data, {
             onSuccess: () => closeDrawer(),
-            onError: (errors) => form.setError(errors),
+            onError: (errors) => {
+                // If the error key is generic 'error' (e.g. from service validations)
+                if (errors.error) {
+                    alert(errors.error);
+                }
+                form.setError(errors);
+            },
         });
     } else {
         router.post('/categories', data, {
             onSuccess: () => closeDrawer(),
-            onError: (errors) => form.setError(errors),
+            onError: (errors) => {
+                if (errors.error) {
+                    alert(errors.error);
+                }
+                form.setError(errors);
+            },
         });
     }
 };
@@ -114,8 +178,59 @@ const deleteCategory = (category: Category) => {
     if (confirm(`Are you sure you want to delete category "${category.name}"?`)) {
         router.delete(`/categories/${category.id}`, {
             preserveScroll: true,
+            onError: (err) => {
+                if (err.error) {
+                    alert(err.error);
+                }
+            }
         });
     }
+};
+
+const restoreCategory = (category: Category) => {
+    if (confirm(`Are you sure you want to restore category "${category.name}"?`)) {
+        router.post(`/categories/${category.id}/restore`, {}, {
+            preserveScroll: true,
+            onSuccess: () => {
+                selectedIds.value = [];
+            }
+        });
+    }
+};
+
+const bulkDelete = () => {
+    if (confirm(`Are you sure you want to delete ${selectedIds.value.length} selected categories?`)) {
+        router.post('/categories/bulk-delete', {
+            ids: selectedIds.value
+        }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                selectedIds.value = [];
+            },
+            onError: (err) => {
+                if (err.error) {
+                    alert(err.error);
+                }
+            }
+        });
+    }
+};
+
+const bulkRestore = () => {
+    if (confirm(`Are you sure you want to restore ${selectedIds.value.length} selected categories?`)) {
+        router.post('/categories/bulk-restore', {
+            ids: selectedIds.value
+        }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                selectedIds.value = [];
+            }
+        });
+    }
+};
+
+const exportCSV = () => {
+    window.location.href = '/categories/export';
 };
 </script>
 
@@ -125,21 +240,89 @@ const deleteCategory = (category: Category) => {
 
         <PageHeader title="Categories" :breadcrumbs="[{ name: 'Categories' }]">
             <template #actions>
-                <SearchInput v-model="search" placeholder="Search categories..." class="mr-2" />
-                <AppButton variant="primary" @click="openCreateDrawer">
-                    Add Category
-                </AppButton>
+                <div class="flex items-center space-x-2">
+                    <SearchInput v-model="search" placeholder="Search categories..." />
+
+                    <AppButton
+                        v-if="hasPermission('categories.export')"
+                        variant="secondary"
+                        @click="exportCSV"
+                        title="Export CSV"
+                    >
+                        Export CSV
+                    </AppButton>
+
+                    <AppButton
+                        v-if="hasPermission('categories.create')"
+                        variant="primary"
+                        @click="openCreateDrawer"
+                    >
+                        Add Category
+                    </AppButton>
+                </div>
             </template>
         </PageHeader>
+
+        <!-- Status Filter Tabs & Bulk Actions Bar -->
+        <div class="mb-5 flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-800 pb-2">
+            <!-- Tabs -->
+            <div class="flex space-x-4">
+                <button
+                    @click="switchTab('active')"
+                    class="pb-2 text-sm font-semibold transition-colors relative"
+                    :class="[
+                        activeTab === 'active'
+                            ? 'text-indigo-600 border-b-2 border-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
+                            : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                    ]"
+                >
+                    Active Categories
+                </button>
+                <button
+                    @click="switchTab('trash')"
+                    class="pb-2 text-sm font-semibold transition-colors relative flex items-center gap-1.5"
+                    :class="[
+                        activeTab === 'trash'
+                            ? 'text-indigo-600 border-b-2 border-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
+                            : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                    ]"
+                >
+                    Trash / Deleted
+                </button>
+            </div>
+
+            <!-- Bulk actions toolbar -->
+            <div v-if="selectedIds.length > 0" class="flex items-center space-x-2 bg-indigo-50 dark:bg-indigo-950/30 px-3 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-900/50">
+                <span class="text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                    {{ selectedIds.length }} selected
+                </span>
+                <AppButton
+                    v-if="activeTab === 'active' && hasPermission('categories.bulk_delete')"
+                    size="sm"
+                    variant="danger"
+                    @click="bulkDelete"
+                >
+                    Bulk Delete
+                </AppButton>
+                <AppButton
+                    v-if="activeTab === 'trash' && hasPermission('categories.bulk_restore')"
+                    size="sm"
+                    variant="primary"
+                    @click="bulkRestore"
+                >
+                    Bulk Restore
+                </AppButton>
+            </div>
+        </div>
 
         <AppCard no-padding>
             <div v-if="categories.data.length === 0" class="p-6">
                 <EmptyState
-                    title="No categories recorded"
-                    description="Organize your retail inventory by defining product categories (e.g. Apparel, Electronics)."
+                    :title="activeTab === 'trash' ? 'No deleted categories' : 'No categories recorded'"
+                    :description="activeTab === 'trash' ? 'Trash is currently empty.' : 'Organize your retail inventory by defining product categories.'"
                 >
                     <template #actions>
-                        <AppButton variant="primary" @click="openCreateDrawer">
+                        <AppButton v-if="activeTab !== 'trash' && hasPermission('categories.create')" variant="primary" @click="openCreateDrawer">
                             Create First Category
                         </AppButton>
                     </template>
@@ -147,8 +330,17 @@ const deleteCategory = (category: Category) => {
             </div>
 
             <div v-else>
-                <AppTable :headers="['Category Name', 'Parent Category', 'Description', 'Status', 'Actions']">
+                <AppTable :headers="['', 'Category Name', 'Parent Category', 'Description', 'Status', 'Actions']">
                     <tr v-for="category in categories.data" :key="category.id" class="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
+                        <!-- Checkbox column -->
+                        <td class="w-10 pl-6 py-4">
+                            <input
+                                type="checkbox"
+                                :checked="selectedIds.includes(category.id)"
+                                @change="toggleSelectOne(category.id)"
+                                class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-800 dark:bg-gray-900"
+                            />
+                        </td>
                         <td class="px-6 py-4 text-sm font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">
                             {{ category.name }}
                         </td>
@@ -170,21 +362,47 @@ const deleteCategory = (category: Category) => {
                                 {{ category.status }}
                             </span>
                         </td>
+                        <!-- Actions column -->
                         <td class="px-6 py-4 text-sm whitespace-nowrap space-x-3">
-                            <button
-                                @click="openEditDrawer(category)"
-                                class="text-xs font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
-                            >
-                                Edit
-                            </button>
-                            <button
-                                @click="deleteCategory(category)"
-                                class="text-xs font-semibold text-red-600 hover:text-red-500 dark:text-red-400"
-                            >
-                                Delete
-                            </button>
+                            <template v-if="activeTab === 'trash'">
+                                <button
+                                    v-if="hasPermission('categories.restore')"
+                                    @click="restoreCategory(category)"
+                                    class="text-xs font-semibold text-green-600 hover:text-green-500 dark:text-green-400"
+                                >
+                                    Restore
+                                </button>
+                            </template>
+                            <template v-else>
+                                <button
+                                    v-if="hasPermission('categories.update')"
+                                    @click="openEditDrawer(category)"
+                                    class="text-xs font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                                >
+                                    Edit
+                                </button>
+                                <button
+                                    v-if="hasPermission('categories.delete')"
+                                    @click="deleteCategory(category)"
+                                    class="text-xs font-semibold text-red-600 hover:text-red-500 dark:text-red-400"
+                                >
+                                    Delete
+                                </button>
+                            </template>
                         </td>
                     </tr>
+
+                    <!-- Table header extension to include the "select all" triggers -->
+                    <template #header-prepend>
+                        <th class="w-10 pl-6 py-3 text-left">
+                            <input
+                                type="checkbox"
+                                :checked="isAllSelected"
+                                @change="toggleSelectAll"
+                                class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-800 dark:bg-gray-900"
+                            />
+                        </th>
+                    </template>
                 </AppTable>
                 <AppPagination :links="categories.links" />
             </div>
