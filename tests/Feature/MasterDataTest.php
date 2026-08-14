@@ -174,7 +174,7 @@ class MasterDataTest extends TestCase
 
     public function test_authorized_user_can_create_brand_with_logo(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
         $logoFile = UploadedFile::fake()->image('brand_logo.png');
 
         $response = $this->actingAs($this->adminUser)->post('/brands', [
@@ -188,7 +188,29 @@ class MasterDataTest extends TestCase
         $brand = Brand::where('name', 'Apple')->first();
         $this->assertNotNull($brand);
         $this->assertNotNull($brand->logo);
-        Storage::disk('public')->assertExists($brand->logo);
+        Storage::disk('local')->assertExists($brand->logo);
+    }
+
+    public function test_authorized_user_can_securely_stream_brand_logo(): void
+    {
+        Storage::fake('local');
+        $logoFile = UploadedFile::fake()->image('secure_brand_logo.png');
+        $path = $logoFile->store('brands', 'local');
+
+        $brand = Brand::create([
+            'name' => 'Secure Brand',
+            'slug' => 'secure-brand',
+            'logo' => $path,
+            'status' => 'active',
+        ]);
+
+        // Super Admin can stream
+        $response = $this->actingAs($this->adminUser)->get("/brands/{$brand->id}/logo");
+        $response->assertOk();
+
+        // Regular user cannot stream (blocks unauthorized access to private storage)
+        $response = $this->actingAs($this->regularUser)->get("/brands/{$brand->id}/logo");
+        $response->assertStatus(403);
     }
 
     // ==========================================
@@ -211,9 +233,33 @@ class MasterDataTest extends TestCase
     // PRODUCTS TESTS
     // ==========================================
 
+    public function test_product_requires_category(): void
+    {
+        // Category strictly required: creating product with null category must fail validation
+        $response = $this->actingAs($this->adminUser)->post('/products', [
+            'name' => 'No Category Product',
+            'sku' => 'NO-CAT-01',
+            'barcode' => '999999999',
+            'category_id' => null, // null category must fail
+            'brand_id' => $this->brand->id,
+            'unit_id' => $this->unit->id,
+            'cost_price' => 10.00,
+            'selling_price' => 15.00,
+            'stock_alert_threshold' => 1.000,
+            'current_stock' => 5.000,
+            'status' => 'active',
+            'track_stock' => true,
+            'allow_decimal' => false,
+            'tax_type' => 'none',
+            'tax_rate' => 0.00,
+        ]);
+
+        $response->assertSessionHasErrors(['category_id']);
+    }
+
     public function test_authorized_user_can_create_and_update_products(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
         $img = UploadedFile::fake()->image('mouse.png');
 
         $response = $this->actingAs($this->adminUser)->post('/products', [
@@ -242,7 +288,7 @@ class MasterDataTest extends TestCase
         $this->assertEquals(1, $product->track_stock);
         $this->assertEquals(0, $product->allow_decimal);
         $this->assertSame('none', $product->tax_type);
-        Storage::disk('public')->assertExists($product->image);
+        Storage::disk('local')->assertExists($product->image);
     }
 
     // ==========================================
@@ -282,6 +328,24 @@ class MasterDataTest extends TestCase
         $this->assertNotSoftDeleted('categories', ['id' => $this->category->id]);
     }
 
+    public function test_authorized_user_can_permanently_force_delete_category(): void
+    {
+        $categoryToKill = Category::create([
+            'name' => 'To Be Killed',
+            'slug' => 'to-be-killed',
+            'status' => 'active',
+        ]);
+
+        // Soft delete first
+        $this->actingAs($this->adminUser)->delete("/categories/{$categoryToKill->id}");
+        $this->assertSoftDeleted('categories', ['id' => $categoryToKill->id]);
+
+        // Permanent force delete
+        $response = $this->actingAs($this->adminUser)->delete("/categories/{$categoryToKill->id}/force-delete");
+        $response->assertRedirect();
+        $this->assertDatabaseMissing('categories', ['id' => $categoryToKill->id]);
+    }
+
     public function test_authorized_user_can_bulk_delete_and_restore_categories(): void
     {
         $category2 = Category::create([
@@ -291,14 +355,14 @@ class MasterDataTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->adminUser)->post('/categories/bulk-delete', [
-            'ids' => [$this->category->id, $category2->id],
+            'ids' => [$this->category->id, $category2->id]
         ]);
         $response->assertRedirect();
         $this->assertSoftDeleted('categories', ['id' => $this->category->id]);
         $this->assertSoftDeleted('categories', ['id' => $category2->id]);
 
         $response = $this->actingAs($this->adminUser)->post('/categories/bulk-restore', [
-            'ids' => [$this->category->id, $category2->id],
+            'ids' => [$this->category->id, $category2->id]
         ]);
         $response->assertRedirect();
         $this->assertNotSoftDeleted('categories', ['id' => $this->category->id]);

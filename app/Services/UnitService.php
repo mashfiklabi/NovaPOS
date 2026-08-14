@@ -60,6 +60,20 @@ class UnitService
     }
 
     /**
+     * Force delete a unit.
+     */
+    public function forceDelete(Unit $unit): void
+    {
+        if ($unit->products()->count() > 0) {
+            throw new \InvalidArgumentException('Cannot permanently delete a unit associated with existing products.');
+        }
+
+        DB::transaction(function () use ($unit) {
+            $unit->forceDelete();
+        });
+    }
+
+    /**
      * Bulk soft delete units.
      *
      * @param  array<int>  $ids
@@ -87,6 +101,21 @@ class UnitService
             $units = Unit::onlyTrashed()->whereIn('id', $ids)->get();
             foreach ($units as $unit) {
                 $unit->restore();
+            }
+        });
+    }
+
+    /**
+     * Bulk force delete units.
+     *
+     * @param  array<int>  $ids
+     */
+    public function bulkForceDelete(array $ids): void
+    {
+        DB::transaction(function () use ($ids) {
+            $units = Unit::onlyTrashed()->whereIn('id', $ids)->get();
+            foreach ($units as $unit) {
+                $this->forceDelete($unit);
             }
         });
     }

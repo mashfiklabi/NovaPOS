@@ -4,16 +4,21 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Helpers\CsvExporter;
 use App\Http\Requests\StoreBrandRequest;
 use App\Http\Requests\UpdateBrandRequest;
+use App\Http\Requests\BulkDestroyBrandRequest;
+use App\Http\Requests\BulkRestoreBrandRequest;
+use App\Http\Requests\BulkForceDeleteBrandRequest;
 use App\Models\Brand;
 use App\Services\BrandService;
+use App\Helpers\CsvExporter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class BrandController extends Controller
 {
@@ -30,18 +35,33 @@ class BrandController extends Controller
 
         $search = $request->input('search');
         $status = $request->input('status', 'active'); // active, trash
+        $sortBy = $request->input('sort_by', 'id');
+        $sortDir = $request->input('sort_dir', 'desc');
+
+        // Whitelist sorting parameters
+        $allowedSorts = ['id', 'name', 'status', 'created_at'];
+        if (!in_array($sortBy, $allowedSorts, true)) {
+            $sortBy = 'id';
+        }
+        $sortDir = $sortDir === 'asc' ? 'asc' : 'desc';
 
         $query = Brand::query();
 
         if ($status === 'trash') {
             $query->onlyTrashed();
+        } else {
+            $query->when($status !== 'all' && in_array($status, ['active', 'inactive'], true), function ($q) use ($status) {
+                $q->where('status', $status);
+            });
         }
 
         $brands = $query->when($search, function ($q, $search) {
-            $q->where('name', 'like', "%{$search}%")
-                ->orWhere('description', 'like', "%{$search}%");
+            $q->where(function ($sub) use ($search) {
+                $sub->where('name', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%");
+            });
         })
-            ->orderBy('id', 'desc')
+            ->orderBy($sortBy, $sortDir)
             ->paginate(10)
             ->withQueryString();
 
@@ -50,8 +70,24 @@ class BrandController extends Controller
             'filters' => [
                 'search' => $search,
                 'status' => $status,
+                'sort_by' => $sortBy,
+                'sort_dir' => $sortDir,
             ],
         ]);
+    }
+
+    /**
+     * Securely stream/serve a brand logo from the private local disk.
+     */
+    public function logo(Brand $brand): BinaryFileResponse
+    {
+        $this->authorize('view', $brand);
+
+        if (!$brand->logo || !Storage::disk('local')->exists($brand->logo)) {
+            abort(404);
+        }
+
+        return response()->file(Storage::disk('local')->path($brand->logo));
     }
 
     /**
@@ -92,7 +128,7 @@ class BrandController extends Controller
         try {
             $this->brandService->delete($brand);
 
-            return redirect()->back()->with('success', 'Brand deleted successfully.');
+            return redirect()->back()->with('success', 'Brand soft-deleted successfully.');
         } catch (\InvalidArgumentException $e) {
             return redirect()->back()->withErrors(['error' => $e->getMessage()]);
         }
@@ -112,21 +148,29 @@ class BrandController extends Controller
     }
 
     /**
-     * Bulk soft delete brands.
+     * Permanently delete a brand.
      */
-    public function bulkDestroy(Request $request): RedirectResponse
+    public function forceDelete(int $id): RedirectResponse
     {
-        $this->authorize('bulkDelete', Brand::class);
-
-        $request->validate([
-            'ids' => 'required|array',
-            'ids.*' => 'required|integer|exists:brands,id',
-        ]);
+        $brand = Brand::onlyTrashed()->findOrFail($id);
+        $this->authorize('delete', $brand);
 
         try {
-            $this->brandService->bulkDelete($request->input('ids'));
+            $this->brandService->forceDelete($brand);
+            return redirect()->back()->with('success', 'Brand permanently deleted.');
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+        }
+    }
 
-            return redirect()->back()->with('success', 'Selected brands deleted successfully.');
+    /**
+     * Bulk soft delete brands.
+     */
+    public function bulkDestroy(BulkDestroyBrandRequest $request): RedirectResponse
+    {
+        try {
+            $this->brandService->bulkDelete($request->input('ids'));
+            return redirect()->back()->with('success', 'Selected brands soft-deleted successfully.');
         } catch (\InvalidArgumentException $e) {
             return redirect()->back()->withErrors(['error' => $e->getMessage()]);
         }
@@ -135,18 +179,24 @@ class BrandController extends Controller
     /**
      * Bulk restore brands.
      */
-    public function bulkRestore(Request $request): RedirectResponse
+    public function bulkRestore(BulkRestoreBrandRequest $request): RedirectResponse
     {
-        $this->authorize('bulkRestore', Brand::class);
-
-        $request->validate([
-            'ids' => 'required|array',
-            'ids.*' => 'required|integer',
-        ]);
-
         $this->brandService->bulkRestore($request->input('ids'));
 
         return redirect()->back()->with('success', 'Selected brands restored successfully.');
+    }
+
+    /**
+     * Bulk permanently delete brands.
+     */
+    public function bulkForceDelete(BulkForceDeleteBrandRequest $request): RedirectResponse
+    {
+        try {
+            $this->brandService->bulkForceDelete($request->input('ids'));
+            return redirect()->back()->with('success', 'Selected brands permanently deleted.');
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+        }
     }
 
     /**
@@ -162,13 +212,13 @@ class BrandController extends Controller
             'Slug',
             'Description',
             'Status',
-            'Created At',
+            'Created At'
         ];
 
         $query = Brand::query()->orderBy('id', 'asc');
 
         return CsvExporter::streamDownload(
-            'brands_export_'.now()->format('Y_m_d_His').'.csv',
+            'brands_export_' . now()->format('Y_m_d_His') . '.csv',
             $headers,
             $query,
             function (Brand $brand) {

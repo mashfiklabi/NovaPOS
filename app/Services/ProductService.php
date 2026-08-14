@@ -20,7 +20,7 @@ class ProductService
     {
         return DB::transaction(function () use ($data, $image) {
             if ($image) {
-                $data['image'] = $image->store('products', 'public');
+                $data['image'] = $image->store('products', 'local');
             }
 
             return Product::create($data);
@@ -35,11 +35,17 @@ class ProductService
     public function update(Product $product, array $data, ?UploadedFile $image = null): Product
     {
         return DB::transaction(function () use ($product, $data, $image) {
+            $oldImage = $product->image;
+
             if ($image) {
-                if ($product->image) {
-                    Storage::disk('public')->delete($product->image);
+                $data['image'] = $image->store('products', 'local');
+
+                // Delete old image safely after transaction commits successfully
+                if ($oldImage) {
+                    DB::afterCommit(function () use ($oldImage) {
+                        Storage::disk('local')->delete($oldImage);
+                    });
                 }
-                $data['image'] = $image->store('products', 'public');
             }
             $product->update($data);
 
@@ -64,6 +70,22 @@ class ProductService
     {
         DB::transaction(function () use ($product) {
             $product->restore();
+        });
+    }
+
+    /**
+     * Force delete a product and delete its image.
+     */
+    public function forceDelete(Product $product): void
+    {
+        DB::transaction(function () use ($product) {
+            $image = $product->image;
+            if ($image) {
+                DB::afterCommit(function () use ($image) {
+                    Storage::disk('local')->delete($image);
+                });
+            }
+            $product->forceDelete();
         });
     }
 
@@ -95,6 +117,21 @@ class ProductService
             $products = Product::onlyTrashed()->whereIn('id', $ids)->get();
             foreach ($products as $product) {
                 $product->restore();
+            }
+        });
+    }
+
+    /**
+     * Bulk force delete products.
+     *
+     * @param  array<int>  $ids
+     */
+    public function bulkForceDelete(array $ids): void
+    {
+        DB::transaction(function () use ($ids) {
+            $products = Product::onlyTrashed()->whereIn('id', $ids)->get();
+            foreach ($products as $product) {
+                $this->forceDelete($product);
             }
         });
     }

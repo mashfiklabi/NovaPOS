@@ -64,6 +64,24 @@ class CategoryService
     }
 
     /**
+     * Force delete a category.
+     */
+    public function forceDelete(Category $category): void
+    {
+        if ($category->children()->count() > 0) {
+            throw new \InvalidArgumentException('Cannot permanently delete a category containing subcategories.');
+        }
+
+        if ($category->products()->count() > 0) {
+            throw new \InvalidArgumentException('Cannot permanently delete a category containing associated products.');
+        }
+
+        DB::transaction(function () use ($category) {
+            $category->forceDelete();
+        });
+    }
+
+    /**
      * Bulk soft delete categories.
      *
      * @param  array<int>  $ids
@@ -91,6 +109,21 @@ class CategoryService
             $categories = Category::onlyTrashed()->whereIn('id', $ids)->get();
             foreach ($categories as $category) {
                 $category->restore();
+            }
+        });
+    }
+
+    /**
+     * Bulk force delete categories.
+     *
+     * @param  array<int>  $ids
+     */
+    public function bulkForceDelete(array $ids): void
+    {
+        DB::transaction(function () use ($ids) {
+            $categories = Category::onlyTrashed()->whereIn('id', $ids)->get();
+            foreach ($categories as $category) {
+                $this->forceDelete($category);
             }
         });
     }

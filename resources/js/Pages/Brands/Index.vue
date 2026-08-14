@@ -33,17 +33,24 @@ const props = defineProps<{
     filters: {
         search: string | null;
         status?: string;
+        sort_by?: string;
+        sort_dir?: string;
     };
 }>();
 
 const search = ref(props.filters.search || '');
-const activeTab = ref(props.filters.status || 'active'); // active, trash
+const activeTab = ref(props.filters.status === 'trash' ? 'trash' : 'active'); // tab: active or trash
+const statusFilter = ref(props.filters.status && props.filters.status !== 'trash' ? props.filters.status : 'all'); // active, inactive, all
+const sortBy = ref(props.filters.sort_by || 'id');
+const sortDir = ref(props.filters.sort_dir || 'desc');
 
 // Sync filters with router
 const updateFilters = () => {
     router.get('/brands', {
         search: search.value || undefined,
-        status: activeTab.value,
+        status: activeTab.value === 'trash' ? 'trash' : statusFilter.value,
+        sort_by: sortBy.value,
+        sort_dir: sortDir.value,
     }, {
         preserveState: true,
         replace: true,
@@ -54,9 +61,26 @@ watch(search, () => {
     updateFilters();
 });
 
-const switchTab = (tab: string) => {
+const switchTab = (tab: 'active' | 'trash') => {
     activeTab.value = tab;
     selectedIds.value = [];
+    statusFilter.value = 'all';
+    updateFilters();
+};
+
+const handleStatusFilterChange = (val: string) => {
+    statusFilter.value = val;
+    activeTab.value = 'active';
+    updateFilters();
+};
+
+const toggleSort = (field: string) => {
+    if (sortBy.value === field) {
+        sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortBy.value = field;
+        sortDir.value = 'asc';
+    }
     updateFilters();
 };
 
@@ -127,7 +151,7 @@ const openCreateDrawer = () => {
 const openEditDrawer = (brand: Brand) => {
     editingBrand.value = brand;
     form.clearErrors();
-    form._method = 'POST'; // support multipart updates with method spoofing
+    form._method = 'POST'; // support file updates with POST method spoofing
     form.name = brand.name;
     form.description = brand.description || '';
     form.status = brand.status;
@@ -167,7 +191,7 @@ const submit = () => {
 };
 
 const deleteBrand = (brand: Brand) => {
-    if (confirm(`Are you sure you want to delete brand "${brand.name}"?`)) {
+    if (confirm(`Are you sure you want to soft delete brand "${brand.name}"?`)) {
         router.delete(`/brands/${brand.id}`, {
             preserveScroll: true,
             onError: (err) => {
@@ -188,8 +212,22 @@ const restoreBrand = (brand: Brand) => {
     }
 };
 
+const permanentlyDeleteBrand = (brand: Brand) => {
+    if (confirm(`WARNING: You are about to PERMANENTLY delete brand "${brand.name}". This will delete its file assets and cannot be undone. Proceed?`)) {
+        router.delete(`/brands/${brand.id}/force-delete`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                selectedIds.value = [];
+            },
+            onError: (err) => {
+                if (err.error) alert(err.error);
+            }
+        });
+    }
+};
+
 const bulkDelete = () => {
-    if (confirm(`Are you sure you want to delete ${selectedIds.value.length} selected brands?`)) {
+    if (confirm(`Are you sure you want to soft delete ${selectedIds.value.length} selected brands?`)) {
         router.post('/brands/bulk-delete', {
             ids: selectedIds.value
         }, {
@@ -212,6 +250,22 @@ const bulkRestore = () => {
             preserveScroll: true,
             onSuccess: () => {
                 selectedIds.value = [];
+            }
+        });
+    }
+};
+
+const bulkForceDelete = () => {
+    if (confirm(`WARNING: You are about to PERMANENTLY delete ${selectedIds.value.length} selected brands. This cannot be undone. Proceed?`)) {
+        router.post('/brands/bulk-force-delete', {
+            ids: selectedIds.value
+        }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                selectedIds.value = [];
+            },
+            onError: (err) => {
+                if (err.error) alert(err.error);
             }
         });
     }
@@ -279,6 +333,20 @@ const exportCSV = () => {
                 </button>
             </div>
 
+            <!-- Proper Status Filter Dropdown -->
+            <div v-if="activeTab === 'active'" class="flex items-center space-x-2">
+                <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">Status:</span>
+                <select
+                    :value="statusFilter"
+                    @change="handleStatusFilterChange(($event.target as HTMLSelectElement).value)"
+                    class="rounded-md border-gray-300 text-xs py-1 pl-2 pr-8 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
+                >
+                    <option value="all">All</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                </select>
+            </div>
+
             <!-- Bulk Toolbar -->
             <div v-if="selectedIds.length > 0" class="flex items-center space-x-2 bg-indigo-50 dark:bg-indigo-950/30 px-3 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-900/50">
                 <span class="text-xs font-bold text-indigo-700 dark:text-indigo-300">
@@ -290,7 +358,7 @@ const exportCSV = () => {
                     variant="danger"
                     @click="bulkDelete"
                 >
-                    Bulk Delete
+                    Bulk Soft Delete
                 </AppButton>
                 <AppButton
                     v-if="activeTab === 'trash' && hasPermission('brands.bulk_restore')"
@@ -299,6 +367,14 @@ const exportCSV = () => {
                     @click="bulkRestore"
                 >
                     Bulk Restore
+                </AppButton>
+                <AppButton
+                    v-if="activeTab === 'trash' && hasPermission('brands.delete')"
+                    size="sm"
+                    variant="danger"
+                    @click="bulkForceDelete"
+                >
+                    Bulk Delete Permanently
                 </AppButton>
             </div>
         </div>
@@ -319,6 +395,35 @@ const exportCSV = () => {
 
             <div v-else>
                 <AppTable :headers="['', 'Brand Logo', 'Brand Name', 'Description', 'Status', 'Actions']">
+                    <!-- Column sorting headers -->
+                    <template #header-tr-content>
+                        <th class="w-10 pl-6 py-3 text-left">
+                            <input
+                                type="checkbox"
+                                :checked="isAllSelected"
+                                @change="toggleSelectAll"
+                                class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-800 dark:bg-gray-900"
+                            />
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                            Brand Logo
+                        </th>
+                        <th @click="toggleSort('name')" class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                            Brand Name
+                            <span v-if="sortBy === 'name'">{{ sortDir === 'asc' ? '▲' : '▼' }}</span>
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                            Description
+                        </th>
+                        <th @click="toggleSort('status')" class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                            Status
+                            <span v-if="sortBy === 'status'">{{ sortDir === 'asc' ? '▲' : '▼' }}</span>
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                            Actions
+                        </th>
+                    </template>
+
                     <tr v-for="brand in brands.data" :key="brand.id" class="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
                         <!-- Checkbox column -->
                         <td class="w-10 pl-6 py-4">
@@ -331,7 +436,8 @@ const exportCSV = () => {
                         </td>
                         <td class="px-6 py-4 text-sm whitespace-nowrap">
                             <div class="h-10 w-16 bg-gray-50 dark:bg-gray-900 border border-gray-150 dark:border-gray-800 rounded flex items-center justify-center overflow-hidden">
-                                <img v-if="brand.logo" :src="`/storage/${brand.logo}`" class="h-full w-full object-contain" />
+                                <!-- Secure authorized stream logo download link -->
+                                <img v-if="brand.logo" :src="route('brands.logo', brand.id)" class="h-full w-full object-contain" />
                                 <span v-else class="text-xs font-bold text-gray-400 uppercase">{{ brand.name.substring(0, 3) }}</span>
                             </div>
                         </td>
@@ -363,6 +469,13 @@ const exportCSV = () => {
                                 >
                                     Restore
                                 </button>
+                                <button
+                                    v-if="hasPermission('brands.delete')"
+                                    @click="permanentlyDeleteBrand(brand)"
+                                    class="text-xs font-semibold text-red-600 hover:text-red-500 dark:text-red-400"
+                                >
+                                    Delete Permanently
+                                </button>
                             </template>
                             <template v-else>
                                 <button
@@ -382,18 +495,6 @@ const exportCSV = () => {
                             </template>
                         </td>
                     </tr>
-
-                    <!-- Table header extension to include "select all" triggers -->
-                    <template #header-prepend>
-                        <th class="w-10 pl-6 py-3 text-left">
-                            <input
-                                type="checkbox"
-                                :checked="isAllSelected"
-                                @change="toggleSelectAll"
-                                class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-800 dark:bg-gray-900"
-                            />
-                        </th>
-                    </template>
                 </AppTable>
                 <AppPagination :links="brands.links" />
             </div>
