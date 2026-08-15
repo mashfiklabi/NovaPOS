@@ -4,19 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Helpers\CsvExporter;
 use App\Http\Requests\StoreUnitRequest;
 use App\Http\Requests\UpdateUnitRequest;
-use App\Http\Requests\BulkDestroyUnitRequest;
-use App\Http\Requests\BulkRestoreUnitRequest;
-use App\Http\Requests\BulkForceDeleteUnitRequest;
 use App\Models\Unit;
 use App\Services\UnitService;
-use App\Helpers\CsvExporter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class UnitController extends Controller
 {
@@ -33,15 +30,6 @@ class UnitController extends Controller
 
         $search = $request->input('search');
         $status = $request->input('status', 'active'); // active, trash
-        $sortBy = $request->input('sort_by', 'id');
-        $sortDir = $request->input('sort_dir', 'desc');
-
-        // Whitelist sorting parameters
-        $allowedSorts = ['id', 'name', 'short_name', 'allow_decimal', 'created_at'];
-        if (!in_array($sortBy, $allowedSorts, true)) {
-            $sortBy = 'id';
-        }
-        $sortDir = $sortDir === 'asc' ? 'asc' : 'desc';
 
         $query = Unit::query();
 
@@ -50,12 +38,10 @@ class UnitController extends Controller
         }
 
         $units = $query->when($search, function ($q, $search) {
-            $q->where(function ($sub) use ($search) {
-                $sub->where('name', 'like', "%{$search}%")
-                    ->orWhere('short_name', 'like', "%{$search}%");
-            });
+            $q->where('name', 'like', "%{$search}%")
+                ->orWhere('short_name', 'like', "%{$search}%");
         })
-            ->orderBy($sortBy, $sortDir)
+            ->orderBy('id', 'desc')
             ->paginate(10)
             ->withQueryString();
 
@@ -64,8 +50,6 @@ class UnitController extends Controller
             'filters' => [
                 'search' => $search,
                 'status' => $status,
-                'sort_by' => $sortBy,
-                'sort_dir' => $sortDir,
             ],
         ]);
     }
@@ -104,7 +88,7 @@ class UnitController extends Controller
         try {
             $this->unitService->delete($unit);
 
-            return redirect()->back()->with('success', 'Unit soft-deleted successfully.');
+            return redirect()->back()->with('success', 'Unit deleted successfully.');
         } catch (\InvalidArgumentException $e) {
             return redirect()->back()->withErrors(['error' => $e->getMessage()]);
         }
@@ -124,29 +108,21 @@ class UnitController extends Controller
     }
 
     /**
-     * Permanently delete a unit.
-     */
-    public function forceDelete(int $id): RedirectResponse
-    {
-        $unit = Unit::onlyTrashed()->findOrFail($id);
-        $this->authorize('delete', $unit);
-
-        try {
-            $this->unitService->forceDelete($unit);
-            return redirect()->back()->with('success', 'Unit permanently deleted.');
-        } catch (\InvalidArgumentException $e) {
-            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
-        }
-    }
-
-    /**
      * Bulk soft delete units.
      */
-    public function bulkDestroy(BulkDestroyUnitRequest $request): RedirectResponse
+    public function bulkDestroy(Request $request): RedirectResponse
     {
+        $this->authorize('bulkDelete', Unit::class);
+
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'required|integer|exists:units,id',
+        ]);
+
         try {
             $this->unitService->bulkDelete($request->input('ids'));
-            return redirect()->back()->with('success', 'Selected units soft-deleted successfully.');
+
+            return redirect()->back()->with('success', 'Selected units deleted successfully.');
         } catch (\InvalidArgumentException $e) {
             return redirect()->back()->withErrors(['error' => $e->getMessage()]);
         }
@@ -155,24 +131,18 @@ class UnitController extends Controller
     /**
      * Bulk restore units.
      */
-    public function bulkRestore(BulkRestoreUnitRequest $request): RedirectResponse
+    public function bulkRestore(Request $request): RedirectResponse
     {
+        $this->authorize('bulkRestore', Unit::class);
+
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'required|integer',
+        ]);
+
         $this->unitService->bulkRestore($request->input('ids'));
 
         return redirect()->back()->with('success', 'Selected units restored successfully.');
-    }
-
-    /**
-     * Bulk permanently delete units.
-     */
-    public function bulkForceDelete(BulkForceDeleteUnitRequest $request): RedirectResponse
-    {
-        try {
-            $this->unitService->bulkForceDelete($request->input('ids'));
-            return redirect()->back()->with('success', 'Selected units permanently deleted.');
-        } catch (\InvalidArgumentException $e) {
-            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
-        }
     }
 
     /**
@@ -187,13 +157,13 @@ class UnitController extends Controller
             'Unit Name',
             'Short Name',
             'Allow Decimal',
-            'Created At'
+            'Created At',
         ];
 
         $query = Unit::query()->orderBy('id', 'asc');
 
         return CsvExporter::streamDownload(
-            'units_export_' . now()->format('Y_m_d_His') . '.csv',
+            'units_export_'.now()->format('Y_m_d_His').'.csv',
             $headers,
             $query,
             function (Unit $unit) {

@@ -30,23 +30,17 @@ const props = defineProps<{
     filters: {
         search: string | null;
         status?: string;
-        sort_by?: string;
-        sort_dir?: string;
     };
 }>();
 
 const search = ref(props.filters.search || '');
-const activeTab = ref(props.filters.status === 'trash' ? 'trash' : 'active'); // active, trash
-const sortBy = ref(props.filters.sort_by || 'id');
-const sortDir = ref(props.filters.sort_dir || 'desc');
+const activeTab = ref(props.filters.status || 'active'); // active, trash
 
 // Sync filters with router
 const updateFilters = () => {
     router.get('/units', {
         search: search.value || undefined,
         status: activeTab.value,
-        sort_by: sortBy.value,
-        sort_dir: sortDir.value,
     }, {
         preserveState: true,
         replace: true,
@@ -57,29 +51,18 @@ watch(search, () => {
     updateFilters();
 });
 
-const switchTab = (tab: 'active' | 'trash') => {
+const switchTab = (tab: string) => {
     activeTab.value = tab;
     selectedIds.value = [];
     updateFilters();
 };
 
-const toggleSort = (field: string) => {
-    if (sortBy.value === field) {
-        sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
-    } else {
-        sortBy.value = field;
-        sortDir.value = 'asc';
-    }
-    updateFilters();
-};
-
 // Check permissions
+const pageProps = usePage().props;
 const hasPermission = (permission: string) => {
-    const auth = (usePage().props.auth as any) || {};
-    const user = auth.user || {};
-    const perms = user.permissions || [];
-    const roles = user.roles || [];
-    if (roles.includes('Super Admin')) {
+    const perms = pageProps.auth?.permissions || [];
+    const roles = pageProps.auth?.user?.roles || [];
+    if (roles.some((r: any) => r.name === 'Super Admin')) {
         return true;
     }
     return perms.includes(permission);
@@ -163,7 +146,7 @@ const submit = () => {
 };
 
 const deleteUnit = (unit: Unit) => {
-    if (confirm(`Are you sure you want to soft delete unit "${unit.name}" (${unit.short_name})?`)) {
+    if (confirm(`Are you sure you want to delete unit "${unit.name}" (${unit.short_name})?`)) {
         router.delete(`/units/${unit.id}`, {
             preserveScroll: true,
             onError: (err) => {
@@ -184,22 +167,8 @@ const restoreUnit = (unit: Unit) => {
     }
 };
 
-const permanentlyDeleteUnit = (unit: Unit) => {
-    if (confirm(`WARNING: You are about to PERMANENTLY delete unit "${unit.name}". This action cannot be undone. Proceed?`)) {
-        router.delete(`/units/${unit.id}/force-delete`, {
-            preserveScroll: true,
-            onSuccess: () => {
-                selectedIds.value = [];
-            },
-            onError: (err) => {
-                if (err.error) alert(err.error);
-            }
-        });
-    }
-};
-
 const bulkDelete = () => {
-    if (confirm(`Are you sure you want to soft delete ${selectedIds.value.length} selected units?`)) {
+    if (confirm(`Are you sure you want to delete ${selectedIds.value.length} selected units?`)) {
         router.post('/units/bulk-delete', {
             ids: selectedIds.value
         }, {
@@ -222,22 +191,6 @@ const bulkRestore = () => {
             preserveScroll: true,
             onSuccess: () => {
                 selectedIds.value = [];
-            }
-        });
-    }
-};
-
-const bulkForceDelete = () => {
-    if (confirm(`WARNING: You are about to PERMANENTLY delete ${selectedIds.value.length} selected units. This cannot be undone. Proceed?`)) {
-        router.post('/units/bulk-force-delete', {
-            ids: selectedIds.value
-        }, {
-            preserveScroll: true,
-            onSuccess: () => {
-                selectedIds.value = [];
-            },
-            onError: (err) => {
-                if (err.error) alert(err.error);
             }
         });
     }
@@ -316,7 +269,7 @@ const exportCSV = () => {
                     variant="danger"
                     @click="bulkDelete"
                 >
-                    Bulk Soft Delete
+                    Bulk Delete
                 </AppButton>
                 <AppButton
                     v-if="activeTab === 'trash' && hasPermission('units.bulk_restore')"
@@ -325,14 +278,6 @@ const exportCSV = () => {
                     @click="bulkRestore"
                 >
                     Bulk Restore
-                </AppButton>
-                <AppButton
-                    v-if="activeTab === 'trash' && hasPermission('units.delete')"
-                    size="sm"
-                    variant="danger"
-                    @click="bulkForceDelete"
-                >
-                    Bulk Delete Permanently
                 </AppButton>
             </div>
         </div>
@@ -353,33 +298,6 @@ const exportCSV = () => {
 
             <div v-else>
                 <AppTable :headers="['', 'Unit Name', 'Short Name', 'Allow Decimals', 'Actions']">
-                    <!-- Column sorting headers -->
-                    <template #header-tr-content>
-                        <th class="w-10 pl-6 py-3 text-left">
-                            <input
-                                type="checkbox"
-                                :checked="isAllSelected"
-                                @change="toggleSelectAll"
-                                class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-800 dark:bg-gray-900"
-                            />
-                        </th>
-                        <th @click="toggleSort('name')" class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                            Unit Name
-                            <span v-if="sortBy === 'name'">{{ sortDir === 'asc' ? '▲' : '▼' }}</span>
-                        </th>
-                        <th @click="toggleSort('short_name')" class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                            Short Name
-                            <span v-if="sortBy === 'short_name'">{{ sortDir === 'asc' ? '▲' : '▼' }}</span>
-                        </th>
-                        <th @click="toggleSort('allow_decimal')" class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                            Allow Decimals
-                            <span v-if="sortBy === 'allow_decimal'">{{ sortDir === 'asc' ? '▲' : '▼' }}</span>
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                            Actions
-                        </th>
-                    </template>
-
                     <tr v-for="unit in units.data" :key="unit.id" class="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
                         <!-- Checkbox column -->
                         <td class="w-10 pl-6 py-4">
@@ -418,13 +336,6 @@ const exportCSV = () => {
                                 >
                                     Restore
                                 </button>
-                                <button
-                                    v-if="hasPermission('units.delete')"
-                                    @click="permanentlyDeleteUnit(unit)"
-                                    class="text-xs font-semibold text-red-600 hover:text-red-500 dark:text-red-400"
-                                >
-                                    Delete Permanently
-                                </button>
                             </template>
                             <template v-else>
                                 <button
@@ -444,6 +355,18 @@ const exportCSV = () => {
                             </template>
                         </td>
                     </tr>
+
+                    <!-- Table header extension to include "select all" triggers -->
+                    <template #header-prepend>
+                        <th class="w-10 pl-6 py-3 text-left">
+                            <input
+                                type="checkbox"
+                                :checked="isAllSelected"
+                                @change="toggleSelectAll"
+                                class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-800 dark:bg-gray-900"
+                            />
+                        </th>
+                    </template>
                 </AppTable>
                 <AppPagination :links="units.links" />
             </div>

@@ -4,19 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Helpers\CsvExporter;
 use App\Http\Requests\StoreCategoryRequest;
 use App\Http\Requests\UpdateCategoryRequest;
-use App\Http\Requests\BulkDestroyCategoryRequest;
-use App\Http\Requests\BulkRestoreCategoryRequest;
-use App\Http\Requests\BulkForceDeleteCategoryRequest;
 use App\Models\Category;
 use App\Services\CategoryService;
-use App\Helpers\CsvExporter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CategoryController extends Controller
 {
@@ -33,34 +30,18 @@ class CategoryController extends Controller
 
         $search = $request->input('search');
         $status = $request->input('status', 'active'); // active, trash
-        $sortBy = $request->input('sort_by', 'id');
-        $sortDir = $request->input('sort_dir', 'desc');
-
-        // Whitelist sorting parameters
-        $allowedSorts = ['id', 'name', 'status', 'created_at'];
-        if (!in_array($sortBy, $allowedSorts, true)) {
-            $sortBy = 'id';
-        }
-        $sortDir = $sortDir === 'asc' ? 'asc' : 'desc';
 
         $query = Category::with('parent');
 
         if ($status === 'trash') {
             $query->onlyTrashed();
-        } else {
-            // Apply standard status filters
-            $query->when($status !== 'all' && in_array($status, ['active', 'inactive'], true), function ($q) use ($status) {
-                $q->where('status', $status);
-            });
         }
 
         $categories = $query->when($search, function ($q, $search) {
-            $q->where(function ($sub) use ($search) {
-                $sub->where('name', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
-            });
+            $q->where('name', 'like', "%{$search}%")
+                ->orWhere('description', 'like', "%{$search}%");
         })
-            ->orderBy($sortBy, $sortDir)
+            ->orderBy('id', 'desc')
             ->paginate(10)
             ->withQueryString();
 
@@ -75,8 +56,6 @@ class CategoryController extends Controller
             'filters' => [
                 'search' => $search,
                 'status' => $status,
-                'sort_by' => $sortBy,
-                'sort_dir' => $sortDir,
             ],
         ]);
     }
@@ -115,7 +94,7 @@ class CategoryController extends Controller
         try {
             $this->categoryService->delete($category);
 
-            return redirect()->back()->with('success', 'Category soft-deleted successfully.');
+            return redirect()->back()->with('success', 'Category deleted successfully.');
         } catch (\InvalidArgumentException $e) {
             return redirect()->back()->withErrors(['error' => $e->getMessage()]);
         }
@@ -135,29 +114,21 @@ class CategoryController extends Controller
     }
 
     /**
-     * Permanently delete a category.
-     */
-    public function forceDelete(int $id): RedirectResponse
-    {
-        $category = Category::onlyTrashed()->findOrFail($id);
-        $this->authorize('delete', $category);
-
-        try {
-            $this->categoryService->forceDelete($category);
-            return redirect()->back()->with('success', 'Category permanently deleted.');
-        } catch (\InvalidArgumentException $e) {
-            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
-        }
-    }
-
-    /**
      * Bulk soft delete categories.
      */
-    public function bulkDestroy(BulkDestroyCategoryRequest $request): RedirectResponse
+    public function bulkDestroy(Request $request): RedirectResponse
     {
+        $this->authorize('bulkDelete', Category::class);
+
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'required|integer|exists:categories,id',
+        ]);
+
         try {
             $this->categoryService->bulkDelete($request->input('ids'));
-            return redirect()->back()->with('success', 'Selected categories soft-deleted successfully.');
+
+            return redirect()->back()->with('success', 'Selected categories deleted successfully.');
         } catch (\InvalidArgumentException $e) {
             return redirect()->back()->withErrors(['error' => $e->getMessage()]);
         }
@@ -166,24 +137,18 @@ class CategoryController extends Controller
     /**
      * Bulk restore categories.
      */
-    public function bulkRestore(BulkRestoreCategoryRequest $request): RedirectResponse
+    public function bulkRestore(Request $request): RedirectResponse
     {
+        $this->authorize('bulkRestore', Category::class);
+
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'required|integer',
+        ]);
+
         $this->categoryService->bulkRestore($request->input('ids'));
 
         return redirect()->back()->with('success', 'Selected categories restored successfully.');
-    }
-
-    /**
-     * Bulk permanently delete categories.
-     */
-    public function bulkForceDelete(BulkForceDeleteCategoryRequest $request): RedirectResponse
-    {
-        try {
-            $this->categoryService->bulkForceDelete($request->input('ids'));
-            return redirect()->back()->with('success', 'Selected categories permanently deleted.');
-        } catch (\InvalidArgumentException $e) {
-            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
-        }
     }
 
     /**
@@ -200,13 +165,13 @@ class CategoryController extends Controller
             'Description',
             'Parent Category',
             'Status',
-            'Created At'
+            'Created At',
         ];
 
         $query = Category::with('parent')->orderBy('id', 'asc');
 
         return CsvExporter::streamDownload(
-            'categories_export_' . now()->format('Y_m_d_His') . '.csv',
+            'categories_export_'.now()->format('Y_m_d_His').'.csv',
             $headers,
             $query,
             function (Category $category) {

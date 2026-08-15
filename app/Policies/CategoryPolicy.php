@@ -33,6 +33,11 @@ class CategoryPolicy
         return $user->hasPermissionTo('categories.restore');
     }
 
+    public function forceDelete(User $user): bool
+    {
+        return $user->hasPermissionTo('categories.force_delete');
+    }
+
     public function bulkDelete(User $user): bool
     {
         return $user->hasPermissionTo('categories.bulk_delete');

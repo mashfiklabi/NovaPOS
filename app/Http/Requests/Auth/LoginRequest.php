@@ -50,6 +50,21 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        $user = Auth::user();
+        if ($user && $user->status !== 'active') {
+            Auth::guard('web')->logout();
+            RateLimiter::hit($this->throttleKey());
+
+            $message = 'Your account has been suspended. Please contact the administrator.';
+            if ($user->status === 'inactive') {
+                $message = 'Your account is inactive. Please contact the administrator.';
+            }
+
+            throw ValidationException::withMessages([
+                'email' => $message,
+            ]);
+        }
+
         RateLimiter::clear($this->throttleKey());
     }
 

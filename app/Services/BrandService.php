@@ -20,7 +20,7 @@ class BrandService
     {
         return DB::transaction(function () use ($data, $logo) {
             if ($logo) {
-                $data['logo'] = $logo->store('brands', 'local');
+                $data['logo'] = $logo->store('brands', 'public');
             }
 
             return Brand::create($data);
@@ -35,17 +35,11 @@ class BrandService
     public function update(Brand $brand, array $data, ?UploadedFile $logo = null): Brand
     {
         return DB::transaction(function () use ($brand, $data, $logo) {
-            $oldLogo = $brand->logo;
-
             if ($logo) {
-                $data['logo'] = $logo->store('brands', 'local');
-
-                // Delete old logo safely after transaction commits successfully
-                if ($oldLogo) {
-                    DB::afterCommit(function () use ($oldLogo) {
-                        Storage::disk('local')->delete($oldLogo);
-                    });
+                if ($brand->logo) {
+                    Storage::disk('public')->delete($brand->logo);
                 }
+                $data['logo'] = $logo->store('brands', 'public');
             }
             $brand->update($data);
 
@@ -78,26 +72,6 @@ class BrandService
     }
 
     /**
-     * Force delete a brand and delete its logo.
-     */
-    public function forceDelete(Brand $brand): void
-    {
-        if ($brand->products()->count() > 0) {
-            throw new \InvalidArgumentException('Cannot permanently delete a brand containing associated products.');
-        }
-
-        DB::transaction(function () use ($brand) {
-            $logo = $brand->logo;
-            if ($logo) {
-                DB::afterCommit(function () use ($logo) {
-                    Storage::disk('local')->delete($logo);
-                });
-            }
-            $brand->forceDelete();
-        });
-    }
-
-    /**
      * Bulk soft delete brands.
      *
      * @param  array<int>  $ids
@@ -125,21 +99,6 @@ class BrandService
             $brands = Brand::onlyTrashed()->whereIn('id', $ids)->get();
             foreach ($brands as $brand) {
                 $brand->restore();
-            }
-        });
-    }
-
-    /**
-     * Bulk force delete brands.
-     *
-     * @param  array<int>  $ids
-     */
-    public function bulkForceDelete(array $ids): void
-    {
-        DB::transaction(function () use ($ids) {
-            $brands = Brand::onlyTrashed()->whereIn('id', $ids)->get();
-            foreach ($brands as $brand) {
-                $this->forceDelete($brand);
             }
         });
     }

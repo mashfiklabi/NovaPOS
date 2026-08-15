@@ -33,6 +33,11 @@ class BrandPolicy
         return $user->hasPermissionTo('brands.restore');
     }
 
+    public function forceDelete(User $user): bool
+    {
+        return $user->hasPermissionTo('brands.force_delete');
+    }
+
     public function bulkDelete(User $user): bool
     {
         return $user->hasPermissionTo('brands.bulk_delete');

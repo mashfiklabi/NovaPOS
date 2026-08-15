@@ -33,6 +33,11 @@ class ProductPolicy
         return $user->hasPermissionTo('products.restore');
     }
 
+    public function forceDelete(User $user): bool
+    {
+        return $user->hasPermissionTo('products.force_delete');
+    }
+
     public function bulkDelete(User $user): bool
     {
         return $user->hasPermissionTo('products.bulk_delete');

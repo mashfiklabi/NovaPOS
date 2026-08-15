@@ -48,8 +48,10 @@ class DatabaseSeeder extends Seeder
             'categories.update' => 'Ability to update categories',
             'categories.delete' => 'Ability to delete categories',
             'categories.restore' => 'Ability to restore soft deleted categories',
+            'categories.force_delete' => 'Ability to permanently delete categories',
             'categories.bulk_delete' => 'Ability to bulk delete categories',
             'categories.bulk_restore' => 'Ability to bulk restore categories',
+            'categories.bulk_force_delete' => 'Ability to bulk permanently delete categories',
             'categories.export' => 'Ability to export categories to CSV',
 
             // Master Data - Brands
@@ -58,8 +60,10 @@ class DatabaseSeeder extends Seeder
             'brands.update' => 'Ability to update brands',
             'brands.delete' => 'Ability to delete brands',
             'brands.restore' => 'Ability to restore soft deleted brands',
+            'brands.force_delete' => 'Ability to permanently delete brands',
             'brands.bulk_delete' => 'Ability to bulk delete brands',
             'brands.bulk_restore' => 'Ability to bulk restore brands',
+            'brands.bulk_force_delete' => 'Ability to bulk permanently delete brands',
             'brands.export' => 'Ability to export brands to CSV',
 
             // Master Data - Units
@@ -68,8 +72,10 @@ class DatabaseSeeder extends Seeder
             'units.update' => 'Ability to update units',
             'units.delete' => 'Ability to delete units',
             'units.restore' => 'Ability to restore soft deleted units',
+            'units.force_delete' => 'Ability to permanently delete units',
             'units.bulk_delete' => 'Ability to bulk delete units',
             'units.bulk_restore' => 'Ability to bulk restore units',
+            'units.bulk_force_delete' => 'Ability to bulk permanently delete units',
             'units.export' => 'Ability to export units to CSV',
 
             // Master Data - Products
@@ -78,8 +84,10 @@ class DatabaseSeeder extends Seeder
             'products.update' => 'Ability to update products',
             'products.delete' => 'Ability to delete products',
             'products.restore' => 'Ability to restore soft deleted products',
+            'products.force_delete' => 'Ability to permanently delete products',
             'products.bulk_delete' => 'Ability to bulk delete products',
             'products.bulk_restore' => 'Ability to bulk restore products',
+            'products.bulk_force_delete' => 'Ability to bulk permanently delete products',
             'products.export' => 'Ability to export products to CSV',
         ];
 
@@ -106,8 +114,10 @@ class DatabaseSeeder extends Seeder
             'categories.update',
             'categories.delete',
             'categories.restore',
+            'categories.force_delete',
             'categories.bulk_delete',
             'categories.bulk_restore',
+            'categories.bulk_force_delete',
             'categories.export',
 
             'brands.view',
@@ -115,8 +125,10 @@ class DatabaseSeeder extends Seeder
             'brands.update',
             'brands.delete',
             'brands.restore',
+            'brands.force_delete',
             'brands.bulk_delete',
             'brands.bulk_restore',
+            'brands.bulk_force_delete',
             'brands.export',
 
             'units.view',
@@ -124,8 +136,10 @@ class DatabaseSeeder extends Seeder
             'units.update',
             'units.delete',
             'units.restore',
+            'units.force_delete',
             'units.bulk_delete',
             'units.bulk_restore',
+            'units.bulk_force_delete',
             'units.export',
 
             'products.view',
@@ -133,8 +147,10 @@ class DatabaseSeeder extends Seeder
             'products.update',
             'products.delete',
             'products.restore',
+            'products.force_delete',
             'products.bulk_delete',
             'products.bulk_restore',
+            'products.bulk_force_delete',
             'products.export',
         ]);
 
