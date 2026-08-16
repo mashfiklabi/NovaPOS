@@ -58,22 +58,33 @@ const switchTab = (tab: string) => {
 };
 
 // Check permissions
-const pageProps = usePage().props;
+const page = usePage();
+const permissions = computed(() => (page.props.auth as any)?.user?.permissions || []);
+const roles = computed(() => (page.props.auth as any)?.user?.roles || []);
+const isSuperAdmin = computed(() => roles.value.includes('Super Admin'));
+
 const hasPermission = (permission: string) => {
-    const perms = pageProps.auth?.permissions || [];
-    const roles = pageProps.auth?.user?.roles || [];
-    if (roles.some((r: any) => r.name === 'Super Admin')) {
-        return true;
-    }
-    return perms.includes(permission);
+    if (isSuperAdmin.value) return true;
+    return permissions.value.includes(permission);
 };
 
 // Checklist select handling
 const selectedIds = ref<number[]>([]);
+const selectAllRef = ref<HTMLInputElement | null>(null);
 
 const isAllSelected = computed(() => {
     return props.units.data.length > 0 && selectedIds.value.length === props.units.data.length;
 });
+
+const isPartiallySelected = computed(() => {
+    return selectedIds.value.length > 0 && selectedIds.value.length < props.units.data.length;
+});
+
+watch([selectedIds, () => props.units.data], () => {
+    if (selectAllRef.value) {
+        selectAllRef.value.indeterminate = isPartiallySelected.value;
+    }
+}, { deep: true });
 
 const toggleSelectAll = () => {
     if (isAllSelected.value) {
@@ -146,7 +157,7 @@ const submit = () => {
 };
 
 const deleteUnit = (unit: Unit) => {
-    if (confirm(`Are you sure you want to delete unit "${unit.name}" (${unit.short_name})?`)) {
+    if (confirm(`Are you sure you want to move unit "${unit.name}" to Trash?`)) {
         router.delete(`/units/${unit.id}`, {
             preserveScroll: true,
             onError: (err) => {
@@ -168,7 +179,7 @@ const restoreUnit = (unit: Unit) => {
 };
 
 const bulkDelete = () => {
-    if (confirm(`Are you sure you want to delete ${selectedIds.value.length} selected units?`)) {
+    if (confirm(`Are you sure you want to move ${selectedIds.value.length} selected units to Trash?`)) {
         router.post('/units/bulk-delete', {
             ids: selectedIds.value
         }, {
@@ -269,7 +280,7 @@ const exportCSV = () => {
                     variant="danger"
                     @click="bulkDelete"
                 >
-                    Bulk Delete
+                    Move to Trash
                 </AppButton>
                 <AppButton
                     v-if="activeTab === 'trash' && hasPermission('units.bulk_restore')"
@@ -350,16 +361,16 @@ const exportCSV = () => {
                                     @click="deleteUnit(unit)"
                                     class="text-xs font-semibold text-red-600 hover:text-red-500 dark:text-red-400"
                                 >
-                                    Delete
+                                    Move to Trash
                                 </button>
                             </template>
                         </td>
                     </tr>
 
-                    <!-- Table header extension to include "select all" triggers -->
                     <template #header-prepend>
                         <th class="w-10 pl-6 py-3 text-left">
                             <input
+                                ref="selectAllRef"
                                 type="checkbox"
                                 :checked="isAllSelected"
                                 @change="toggleSelectAll"

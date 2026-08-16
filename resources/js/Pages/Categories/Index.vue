@@ -71,22 +71,33 @@ const switchTab = (tab: string) => {
 };
 
 // Check permissions
-const pageProps = usePage().props;
+const page = usePage();
+const permissions = computed(() => (page.props.auth as any)?.user?.permissions || []);
+const roles = computed(() => (page.props.auth as any)?.user?.roles || []);
+const isSuperAdmin = computed(() => roles.value.includes('Super Admin'));
+
 const hasPermission = (permission: string) => {
-    const perms = pageProps.auth?.permissions || [];
-    const roles = pageProps.auth?.user?.roles || [];
-    if (roles.some((r: any) => r.name === 'Super Admin')) {
-        return true;
-    }
-    return perms.includes(permission);
+    if (isSuperAdmin.value) return true;
+    return permissions.value.includes(permission);
 };
 
 // Multi-select handling
 const selectedIds = ref<number[]>([]);
+const selectAllRef = ref<HTMLInputElement | null>(null);
 
 const isAllSelected = computed(() => {
     return props.categories.data.length > 0 && selectedIds.value.length === props.categories.data.length;
 });
+
+const isPartiallySelected = computed(() => {
+    return selectedIds.value.length > 0 && selectedIds.value.length < props.categories.data.length;
+});
+
+watch([selectedIds, () => props.categories.data], () => {
+    if (selectAllRef.value) {
+        selectAllRef.value.indeterminate = isPartiallySelected.value;
+    }
+}, { deep: true });
 
 const toggleSelectAll = () => {
     if (isAllSelected.value) {
@@ -154,10 +165,7 @@ const submit = () => {
         router.put(`/categories/${editingCategory.value.id}`, data, {
             onSuccess: () => closeDrawer(),
             onError: (errors) => {
-                // If the error key is generic 'error' (e.g. from service validations)
-                if (errors.error) {
-                    alert(errors.error);
-                }
+                if (errors.error) alert(errors.error);
                 form.setError(errors);
             },
         });
@@ -165,9 +173,7 @@ const submit = () => {
         router.post('/categories', data, {
             onSuccess: () => closeDrawer(),
             onError: (errors) => {
-                if (errors.error) {
-                    alert(errors.error);
-                }
+                if (errors.error) alert(errors.error);
                 form.setError(errors);
             },
         });
@@ -175,13 +181,11 @@ const submit = () => {
 };
 
 const deleteCategory = (category: Category) => {
-    if (confirm(`Are you sure you want to delete category "${category.name}"?`)) {
+    if (confirm(`Are you sure you want to move category "${category.name}" to Trash?`)) {
         router.delete(`/categories/${category.id}`, {
             preserveScroll: true,
             onError: (err) => {
-                if (err.error) {
-                    alert(err.error);
-                }
+                if (err.error) alert(err.error);
             }
         });
     }
@@ -199,7 +203,7 @@ const restoreCategory = (category: Category) => {
 };
 
 const bulkDelete = () => {
-    if (confirm(`Are you sure you want to delete ${selectedIds.value.length} selected categories?`)) {
+    if (confirm(`Are you sure you want to move ${selectedIds.value.length} selected categories to Trash?`)) {
         router.post('/categories/bulk-delete', {
             ids: selectedIds.value
         }, {
@@ -208,9 +212,7 @@ const bulkDelete = () => {
                 selectedIds.value = [];
             },
             onError: (err) => {
-                if (err.error) {
-                    alert(err.error);
-                }
+                if (err.error) alert(err.error);
             }
         });
     }
@@ -302,7 +304,7 @@ const exportCSV = () => {
                     variant="danger"
                     @click="bulkDelete"
                 >
-                    Bulk Delete
+                    Move to Trash
                 </AppButton>
                 <AppButton
                     v-if="activeTab === 'trash' && hasPermission('categories.bulk_restore')"
@@ -386,16 +388,16 @@ const exportCSV = () => {
                                     @click="deleteCategory(category)"
                                     class="text-xs font-semibold text-red-600 hover:text-red-500 dark:text-red-400"
                                 >
-                                    Delete
+                                    Move to Trash
                                 </button>
                             </template>
                         </td>
                     </tr>
 
-                    <!-- Table header extension to include the "select all" triggers -->
                     <template #header-prepend>
                         <th class="w-10 pl-6 py-3 text-left">
                             <input
+                                ref="selectAllRef"
                                 type="checkbox"
                                 :checked="isAllSelected"
                                 @change="toggleSelectAll"
