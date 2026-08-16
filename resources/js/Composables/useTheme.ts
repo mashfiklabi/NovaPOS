@@ -1,8 +1,8 @@
 import { ref } from 'vue';
 
-export type Theme = 'light' | 'dark' | 'system';
+export type Theme = 'light' | 'dark';
 
-const theme = ref<Theme>('system');
+const theme = ref<Theme>('light');
 const isDark = ref(false);
 
 export function useTheme() {
@@ -10,13 +10,7 @@ export function useTheme() {
         theme.value = targetTheme;
         localStorage.setItem('novapos_theme', targetTheme);
 
-        let dark = false;
-        if (targetTheme === 'system') {
-            dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        } else {
-            dark = targetTheme === 'dark';
-        }
-
+        const dark = targetTheme === 'dark';
         isDark.value = dark;
 
         if (dark) {
@@ -27,30 +21,22 @@ export function useTheme() {
     };
 
     const toggleTheme = () => {
-        if (theme.value === 'light') {
-            applyTheme('dark');
-        } else if (theme.value === 'dark') {
-            applyTheme('system');
-        } else {
-            applyTheme('light');
-        }
+        const nextTheme: Theme = theme.value === 'light' ? 'dark' : 'light';
+        applyTheme(nextTheme);
     };
 
     const initTheme = () => {
         const stored = localStorage.getItem('novapos_theme') as Theme | null;
-        const initialTheme = stored && ['light', 'dark', 'system'].includes(stored) ? stored : 'system';
-        applyTheme(initialTheme);
+        let initialTheme: Theme;
 
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-            if (theme.value === 'system') {
-                isDark.value = e.matches;
-                if (e.matches) {
-                    document.documentElement.classList.add('dark');
-                } else {
-                    document.documentElement.classList.remove('dark');
-                }
-            }
-        });
+        if (stored && ['light', 'dark'].includes(stored)) {
+            initialTheme = stored;
+        } else {
+            const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            initialTheme = systemPrefersDark ? 'dark' : 'light';
+        }
+
+        applyTheme(initialTheme);
     };
 
     return {

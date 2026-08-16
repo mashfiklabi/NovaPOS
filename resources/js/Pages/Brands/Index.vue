@@ -61,33 +61,22 @@ const switchTab = (tab: string) => {
 };
 
 // Check permissions
-const page = usePage();
-const permissions = computed(() => (page.props.auth as any)?.user?.permissions || []);
-const roles = computed(() => (page.props.auth as any)?.user?.roles || []);
-const isSuperAdmin = computed(() => roles.value.includes('Super Admin'));
-
+const pageProps = usePage().props;
 const hasPermission = (permission: string) => {
-    if (isSuperAdmin.value) return true;
-    return permissions.value.includes(permission);
+    const perms = pageProps.auth?.permissions || [];
+    const roles = pageProps.auth?.user?.roles || [];
+    if (roles.some((r: any) => r.name === 'Super Admin')) {
+        return true;
+    }
+    return perms.includes(permission);
 };
 
 // Checklist select handling
 const selectedIds = ref<number[]>([]);
-const selectAllRef = ref<HTMLInputElement | null>(null);
 
 const isAllSelected = computed(() => {
     return props.brands.data.length > 0 && selectedIds.value.length === props.brands.data.length;
 });
-
-const isPartiallySelected = computed(() => {
-    return selectedIds.value.length > 0 && selectedIds.value.length < props.brands.data.length;
-});
-
-watch([selectedIds, () => props.brands.data], () => {
-    if (selectAllRef.value) {
-        selectAllRef.value.indeterminate = isPartiallySelected.value;
-    }
-}, { deep: true });
 
 const toggleSelectAll = () => {
     if (isAllSelected.value) {
@@ -137,7 +126,7 @@ const openCreateDrawer = () => {
 const openEditDrawer = (brand: Brand) => {
     editingBrand.value = brand;
     form.clearErrors();
-    form._method = 'POST';
+    form._method = 'POST'; // support multipart updates with method spoofing
     form.name = brand.name;
     form.description = brand.description || '';
     form.status = brand.status;
@@ -177,7 +166,7 @@ const submit = () => {
 };
 
 const deleteBrand = (brand: Brand) => {
-    if (confirm(`Are you sure you want to move brand "${brand.name}" to Trash?`)) {
+    if (confirm(`Are you sure you want to delete brand "${brand.name}"?`)) {
         router.delete(`/brands/${brand.id}`, {
             preserveScroll: true,
             onError: (err) => {
@@ -199,7 +188,7 @@ const restoreBrand = (brand: Brand) => {
 };
 
 const bulkDelete = () => {
-    if (confirm(`Are you sure you want to move ${selectedIds.value.length} selected brands to Trash?`)) {
+    if (confirm(`Are you sure you want to delete ${selectedIds.value.length} selected brands?`)) {
         router.post('/brands/bulk-delete', {
             ids: selectedIds.value
         }, {
@@ -300,7 +289,7 @@ const exportCSV = () => {
                     variant="danger"
                     @click="bulkDelete"
                 >
-                    Move to Trash
+                    Bulk Delete
                 </AppButton>
                 <AppButton
                     v-if="activeTab === 'trash' && hasPermission('brands.bulk_restore')"
@@ -341,7 +330,7 @@ const exportCSV = () => {
                         </td>
                         <td class="px-6 py-4 text-sm whitespace-nowrap">
                             <div class="h-10 w-16 bg-gray-50 dark:bg-gray-900 border border-gray-150 dark:border-gray-800 rounded flex items-center justify-center overflow-hidden">
-                                <img v-if="brand.logo" :src="`/brands/${brand.id}/logo`" class="h-full w-full object-contain" />
+                                <img v-if="brand.logo" :src="`/storage/${brand.logo}`" class="h-full w-full object-contain" />
                                 <span v-else class="text-xs font-bold text-gray-400 uppercase">{{ brand.name.substring(0, 3) }}</span>
                             </div>
                         </td>
@@ -387,16 +376,16 @@ const exportCSV = () => {
                                     @click="deleteBrand(brand)"
                                     class="text-xs font-semibold text-red-600 hover:text-red-500 dark:text-red-400"
                                 >
-                                    Move to Trash
+                                    Delete
                                 </button>
                             </template>
                         </td>
                     </tr>
 
+                    <!-- Table header extension to include "select all" triggers -->
                     <template #header-prepend>
                         <th class="w-10 pl-6 py-3 text-left">
                             <input
-                                ref="selectAllRef"
                                 type="checkbox"
                                 :checked="isAllSelected"
                                 @change="toggleSelectAll"
