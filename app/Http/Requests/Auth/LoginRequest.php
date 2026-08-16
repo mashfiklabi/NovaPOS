@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Enums\UserStatus;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -51,12 +52,12 @@ class LoginRequest extends FormRequest
         }
 
         $user = Auth::user();
-        if ($user && $user->status !== 'active') {
+        if ($user && $user->status !== UserStatus::ACTIVE) {
             Auth::guard('web')->logout();
             RateLimiter::hit($this->throttleKey());
 
             $message = 'Your account has been suspended. Please contact the administrator.';
-            if ($user->status === 'inactive') {
+            if ($user->status === UserStatus::INACTIVE) {
                 $message = 'Your account is inactive. Please contact the administrator.';
             }
 

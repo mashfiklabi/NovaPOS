@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Enums\UserStatus;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,14 +19,14 @@ class EnsureUserIsActive
     {
         if (Auth::check()) {
             $user = Auth::user();
-            if ($user->status !== 'active') {
+            if ($user->status !== UserStatus::ACTIVE) {
                 Auth::guard('web')->logout();
 
                 $request->session()->invalidate();
                 $request->session()->regenerateToken();
 
                 $message = 'Your account has been suspended. Please contact the administrator.';
-                if ($user->status === 'inactive') {
+                if ($user->status === UserStatus::INACTIVE) {
                     $message = 'Your account is inactive. Please contact the administrator.';
                 }
 
