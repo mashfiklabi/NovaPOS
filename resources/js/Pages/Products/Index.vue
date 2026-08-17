@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue';
-import { Head, useForm, router, usePage } from '@inertiajs/vue3';
+import { ref, watch } from 'vue';
+import { Head, useForm, router } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AppCard from '@/Components/AppCard.vue';
 import PageHeader from '@/Components/PageHeader.vue';
@@ -65,16 +65,6 @@ const props = defineProps<{
     };
 }>();
 
-const page = usePage();
-const permissions = computed(() => (page.props.auth as any)?.user?.permissions || []);
-const roles = computed(() => (page.props.auth as any)?.user?.roles || []);
-const isSuperAdmin = computed(() => roles.value.includes('Super Admin'));
-
-const hasPermission = (permission: string) => {
-    if (isSuperAdmin.value) return true;
-    return permissions.value.includes(permission);
-};
-
 const search = ref(props.filters.search || '');
 
 watch(search, (value) => {
@@ -130,7 +120,7 @@ const openCreateDrawer = () => {
 const openEditDrawer = (product: Product) => {
     editingProduct.value = product;
     form.clearErrors();
-    form._method = 'POST';
+    form._method = 'POST'; // we override using POST with _method=PUT to support files with PUT
     form.name = product.name;
     form.sku = product.sku;
     form.barcode = product.barcode || '';
@@ -156,6 +146,7 @@ const closeDrawer = () => {
 const submit = () => {
     const url = editingProduct.value ? `/products/${editingProduct.value.id}` : '/products';
 
+    // Normalise fields
     const transformData = (data: any) => {
         const normalised = { ...data };
         normalised.category_id = normalised.category_id === '' ? null : Number(normalised.category_id);
@@ -193,10 +184,6 @@ const formatStock = (value: string, shortName: string) => {
     const formattedVal = Number(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
     return `${formattedVal} ${shortName}`;
 };
-
-const exportCSV = () => {
-    window.location.href = '/products/export';
-};
 </script>
 
 <template>
@@ -205,26 +192,10 @@ const exportCSV = () => {
 
         <PageHeader title="Products" :breadcrumbs="[{ name: 'Products' }]">
             <template #actions>
-                <div class="flex items-center space-x-2">
-                    <SearchInput v-model="search" placeholder="Search sku, barcode, name..." />
-
-                    <AppButton
-                        v-if="hasPermission('products.export')"
-                        variant="secondary"
-                        @click="exportCSV"
-                        title="Export CSV"
-                    >
-                        Export CSV
-                    </AppButton>
-
-                    <AppButton
-                        v-if="hasPermission('products.create')"
-                        variant="primary"
-                        @click="openCreateDrawer"
-                    >
-                        Add Product
-                    </AppButton>
-                </div>
+                <SearchInput v-model="search" placeholder="Search sku, barcode, name..." class="mr-2" />
+                <AppButton variant="primary" @click="openCreateDrawer">
+                    Add Product
+                </AppButton>
             </template>
         </PageHeader>
 
@@ -235,7 +206,7 @@ const exportCSV = () => {
                     description="Populate your store shelves by introducing products, configuring cost sheets, and defining stock alert triggers."
                 >
                     <template #actions>
-                        <AppButton v-if="hasPermission('products.create')" variant="primary" @click="openCreateDrawer">
+                        <AppButton variant="primary" @click="openCreateDrawer">
                             Add New Product
                         </AppButton>
                     </template>
@@ -247,13 +218,13 @@ const exportCSV = () => {
                     <tr v-for="product in products.data" :key="product.id" class="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
                         <td class="px-6 py-4 text-sm whitespace-nowrap">
                             <div class="flex items-center space-x-3">
-                                <div class="h-10 w-10 bg-gray-50 dark:bg-gray-900 border border-gray-150 dark:border-gray-800 rounded flex items-center justify-center overflow-hidden shrink-0">
-                                    <img v-if="product.image" :src="`/products/${product.id}/image`" class="h-full w-full object-cover" />
+                                <div class="h-10 w-10 bg-gray-50 dark:bg-gray-900 border border-gray-150 dark:border-gray-800 rounded flex items-center justify-center overflow-hidden">
+                                    <img v-if="product.image" :src="`/storage/${product.image}`" class="h-full w-full object-cover" />
                                     <span v-else class="text-xs font-bold text-gray-400 uppercase">{{ product.name.substring(0, 2) }}</span>
                                 </div>
                                 <div>
                                     <p class="font-bold text-gray-900 dark:text-gray-100 max-w-xs truncate">{{ product.name }}</p>
-                                    <p class="text-xs text-gray-400">{{ product.unit ? product.unit.name : 'Units' }}</p>
+                                    <p class="text-xs text-gray-400">{{ product.unit.name }}</p>
                                 </div>
                             </div>
                         </td>
@@ -278,9 +249,9 @@ const exportCSV = () => {
                                         : 'text-gray-900 dark:text-gray-100'
                                 ]"
                             >
-                                {{ formatStock(product.current_stock, product.unit ? product.unit.short_name : '') }}
+                                {{ formatStock(product.current_stock, product.unit.short_name) }}
                             </p>
-                            <p class="text-xs text-gray-400">Alert at: {{ formatStock(product.stock_alert_threshold, product.unit ? product.unit.short_name : '') }}</p>
+                            <p class="text-xs text-gray-400">Alert at: {{ formatStock(product.stock_alert_threshold, product.unit.short_name) }}</p>
                         </td>
                         <td class="px-6 py-4 text-sm whitespace-nowrap">
                             <span
@@ -298,14 +269,12 @@ const exportCSV = () => {
                         </td>
                         <td class="px-6 py-4 text-sm whitespace-nowrap space-x-3">
                             <button
-                                v-if="hasPermission('products.update')"
                                 @click="openEditDrawer(product)"
                                 class="text-xs font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
                             >
                                 Edit
                             </button>
                             <button
-                                v-if="hasPermission('products.delete')"
                                 @click="deleteProduct(product)"
                                 class="text-xs font-semibold text-red-600 hover:text-red-500 dark:text-red-400"
                             >
