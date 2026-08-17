@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
-import { Head, useForm, router } from '@inertiajs/vue3';
+import { ref, watch, computed } from 'vue';
+import { Head, useForm, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AppCard from '@/Components/AppCard.vue';
 import PageHeader from '@/Components/PageHeader.vue';
@@ -45,11 +45,16 @@ interface Product {
     selling_price: string;
     stock_alert_threshold: string;
     current_stock: string;
+    track_stock: boolean;
+    allow_decimal: boolean;
+    tax_type: string;
+    tax_rate: string;
     image: string | null;
     status: string;
     category: Category | null;
     brand: Brand | null;
     unit: Unit;
+    deleted_at: string | null;
 }
 
 const props = defineProps<{
@@ -62,17 +67,77 @@ const props = defineProps<{
     units: Unit[];
     filters: {
         search: string | null;
+        status?: string;
     };
 }>();
 
-const search = ref(props.filters.search || '');
+const page = usePage();
+const permissions = computed(() => (page.props.auth as any)?.user?.permissions || []);
+const roles = computed(() => (page.props.auth as any)?.user?.roles || []);
+const isSuperAdmin = computed(() => roles.value.includes('Super Admin'));
 
-watch(search, (value) => {
-    router.get('/products', { search: value }, {
+const hasPermission = (permission: string) => {
+    if (isSuperAdmin.value) return true;
+    return permissions.value.includes(permission);
+};
+
+const search = ref(props.filters.search || '');
+const currentStatus = ref(props.filters.status || 'active'); // active, trash
+
+const updateFilters = () => {
+    router.get('/products', {
+        search: search.value || undefined,
+        status: currentStatus.value,
+    }, {
         preserveState: true,
         replace: true,
     });
+};
+
+watch(search, () => {
+    updateFilters();
 });
+
+const switchTab = (tab: string) => {
+    currentStatus.value = tab;
+    selectedIds.value = [];
+    updateFilters();
+};
+
+// Bulk Selection
+const selectedIds = ref<number[]>([]);
+const selectAllRef = ref<HTMLInputElement | null>(null);
+
+const isAllSelected = computed(() => {
+    return props.products.data.length > 0 && selectedIds.value.length === props.products.data.length;
+});
+
+const isPartiallySelected = computed(() => {
+    return selectedIds.value.length > 0 && selectedIds.value.length < props.products.data.length;
+});
+
+watch([selectedIds, () => props.products.data], () => {
+    if (selectAllRef.value) {
+        selectAllRef.value.indeterminate = isPartiallySelected.value;
+    }
+}, { deep: true });
+
+const toggleSelectAll = () => {
+    if (isAllSelected.value) {
+        selectedIds.value = [];
+    } else {
+        selectedIds.value = props.products.data.map(p => p.id);
+    }
+};
+
+const toggleSelectProduct = (id: number) => {
+    const idx = selectedIds.value.indexOf(id);
+    if (idx > -1) {
+        selectedIds.value.splice(idx, 1);
+    } else {
+        selectedIds.value.push(id);
+    }
+};
 
 const isDrawerOpen = ref(false);
 const editingProduct = ref<Product | null>(null);
@@ -90,6 +155,10 @@ const form = useForm({
     selling_price: '',
     stock_alert_threshold: '0.000',
     current_stock: '0.000',
+    track_stock: true,
+    allow_decimal: false,
+    tax_type: 'exclusive',
+    tax_rate: '0.00',
     image: null as File | null,
     status: 'active',
 });
@@ -114,13 +183,17 @@ const openCreateDrawer = () => {
     form.selling_price = '';
     form.stock_alert_threshold = '0.000';
     form.current_stock = '0.000';
+    form.track_stock = true;
+    form.allow_decimal = false;
+    form.tax_type = 'exclusive';
+    form.tax_rate = '0.00';
     isDrawerOpen.value = true;
 };
 
 const openEditDrawer = (product: Product) => {
     editingProduct.value = product;
     form.clearErrors();
-    form._method = 'POST'; // we override using POST with _method=PUT to support files with PUT
+    form._method = 'POST';
     form.name = product.name;
     form.sku = product.sku;
     form.barcode = product.barcode || '';
@@ -132,6 +205,10 @@ const openEditDrawer = (product: Product) => {
     form.selling_price = product.selling_price;
     form.stock_alert_threshold = product.stock_alert_threshold;
     form.current_stock = product.current_stock;
+    form.track_stock = Boolean(product.track_stock);
+    form.allow_decimal = Boolean(product.allow_decimal);
+    form.tax_type = product.tax_type || 'exclusive';
+    form.tax_rate = product.tax_rate || '0.00';
     form.status = product.status;
     form.image = null;
     isDrawerOpen.value = true;
@@ -146,7 +223,6 @@ const closeDrawer = () => {
 const submit = () => {
     const url = editingProduct.value ? `/products/${editingProduct.value.id}` : '/products';
 
-    // Normalise fields
     const transformData = (data: any) => {
         const normalised = { ...data };
         normalised.category_id = normalised.category_id === '' ? null : Number(normalised.category_id);
@@ -156,6 +232,7 @@ const submit = () => {
         normalised.selling_price = Number(normalised.selling_price);
         normalised.stock_alert_threshold = Number(normalised.stock_alert_threshold);
         normalised.current_stock = Number(normalised.current_stock);
+        normalised.tax_rate = Number(normalised.tax_rate);
 
         if (editingProduct.value) {
             normalised._method = 'PUT';
@@ -169,9 +246,35 @@ const submit = () => {
 };
 
 const deleteProduct = (product: Product) => {
-    if (confirm(`Are you sure you want to delete product "${product.name}"?`)) {
-        router.delete(`/products/${product.id}`, {
+    if (confirm(`Are you sure you want to move product "${product.name}" to Trash?`)) {
+        router.delete(`/products/${product.id}`, { preserveScroll: true });
+    }
+};
+
+const restoreProduct = (product: Product) => {
+    if (confirm(`Are you sure you want to restore product "${product.name}"?`)) {
+        router.post(`/products/${product.id}/restore`, {}, {
             preserveScroll: true,
+            onSuccess: () => selectedIds.value = [],
+        });
+    }
+};
+
+// Bulk Actions
+const bulkDelete = () => {
+    if (confirm(`Are you sure you want to move ${selectedIds.value.length} selected products to Trash?`)) {
+        router.post('/products/bulk-delete', { ids: selectedIds.value }, {
+            preserveScroll: true,
+            onSuccess: () => selectedIds.value = [],
+        });
+    }
+};
+
+const bulkRestore = () => {
+    if (confirm(`Are you sure you want to restore ${selectedIds.value.length} selected products?`)) {
+        router.post('/products/bulk-restore', { ids: selectedIds.value }, {
+            preserveScroll: true,
+            onSuccess: () => selectedIds.value = [],
         });
     }
 };
@@ -184,6 +287,10 @@ const formatStock = (value: string, shortName: string) => {
     const formattedVal = Number(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
     return `${formattedVal} ${shortName}`;
 };
+
+const exportCSV = () => {
+    window.location.href = '/products/export';
+};
 </script>
 
 <template>
@@ -192,39 +299,116 @@ const formatStock = (value: string, shortName: string) => {
 
         <PageHeader title="Products" :breadcrumbs="[{ name: 'Products' }]">
             <template #actions>
-                <SearchInput v-model="search" placeholder="Search sku, barcode, name..." class="mr-2" />
-                <AppButton variant="primary" @click="openCreateDrawer">
-                    Add Product
-                </AppButton>
+                <div class="flex items-center space-x-2">
+                    <SearchInput v-model="search" placeholder="Search sku, barcode, name..." />
+
+                    <AppButton
+                        v-if="hasPermission('products.export')"
+                        variant="secondary"
+                        @click="exportCSV"
+                        title="Export CSV"
+                    >
+                        Export CSV
+                    </AppButton>
+
+                    <AppButton
+                        v-if="hasPermission('products.create')"
+                        variant="primary"
+                        @click="openCreateDrawer"
+                    >
+                        Add Product
+                    </AppButton>
+                </div>
             </template>
         </PageHeader>
+
+        <!-- Status Filter Tabs & Bulk Actions Bar -->
+        <div class="mb-5 flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-800 pb-2">
+            <!-- Tabs -->
+            <div class="flex space-x-4">
+                <button
+                    @click="switchTab('active')"
+                    class="pb-2 text-sm font-semibold transition-colors relative"
+                    :class="[
+                        currentStatus === 'active'
+                            ? 'text-indigo-600 border-b-2 border-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
+                            : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                    ]"
+                >
+                    Active Products
+                </button>
+                <button
+                    @click="switchTab('trash')"
+                    class="pb-2 text-sm font-semibold transition-colors relative flex items-center gap-1.5"
+                    :class="[
+                        currentStatus === 'trash'
+                            ? 'text-indigo-600 border-b-2 border-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
+                            : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                    ]"
+                >
+                    Trash / Deleted
+                </button>
+            </div>
+
+            <!-- Bulk Toolbar -->
+            <div v-if="selectedIds.length > 0" class="flex items-center space-x-2 bg-indigo-50 dark:bg-indigo-950/30 px-3 py-1.5 rounded-lg border border-indigo-100 dark:border-indigo-900/50">
+                <span class="text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                    {{ selectedIds.length }} selected
+                </span>
+                <AppButton
+                    v-if="currentStatus === 'active' && hasPermission('products.bulk_delete')"
+                    size="sm"
+                    variant="danger"
+                    @click="bulkDelete"
+                >
+                    Move to Trash
+                </AppButton>
+                <AppButton
+                    v-if="currentStatus === 'trash' && hasPermission('products.bulk_restore')"
+                    size="sm"
+                    variant="primary"
+                    @click="bulkRestore"
+                >
+                    Bulk Restore
+                </AppButton>
+            </div>
+        </div>
 
         <AppCard no-padding>
             <div v-if="products.data.length === 0" class="p-6">
                 <EmptyState
-                    title="No products recorded"
-                    description="Populate your store shelves by introducing products, configuring cost sheets, and defining stock alert triggers."
+                    :title="currentStatus === 'trash' ? 'No deleted products' : 'No products recorded'"
+                    :description="currentStatus === 'trash' ? 'Trash is currently empty.' : 'Populate your store shelves by introducing products, configuring cost sheets, and defining stock alert triggers.'"
                 >
                     <template #actions>
-                        <AppButton variant="primary" @click="openCreateDrawer">
-                            Add New Product
+                        <AppButton v-if="currentStatus !== 'trash' && hasPermission('products.create')" variant="primary" @click="openCreateDrawer">
+                            Create First Product
                         </AppButton>
                     </template>
                 </EmptyState>
             </div>
 
             <div v-else>
-                <AppTable :headers="['Product Detail', 'SKU / Barcode', 'Category & Brand', 'Cost / Retail', 'Stock / Alert', 'Status', 'Actions']">
+                <AppTable :headers="['', 'Product Detail', 'SKU / Barcode', 'Category & Brand', 'Cost / Retail', 'Stock / Alert', 'Status', 'Actions']">
                     <tr v-for="product in products.data" :key="product.id" class="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
+                        <!-- Checkbox column -->
+                        <td class="w-10 pl-6 py-4">
+                            <input
+                                type="checkbox"
+                                :checked="selectedIds.includes(product.id)"
+                                @change="toggleSelectProduct(product.id)"
+                                class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-800 dark:bg-gray-900"
+                            />
+                        </td>
                         <td class="px-6 py-4 text-sm whitespace-nowrap">
                             <div class="flex items-center space-x-3">
-                                <div class="h-10 w-10 bg-gray-50 dark:bg-gray-900 border border-gray-150 dark:border-gray-800 rounded flex items-center justify-center overflow-hidden">
-                                    <img v-if="product.image" :src="`/storage/${product.image}`" class="h-full w-full object-cover" />
+                                <div class="h-10 w-10 bg-gray-50 dark:bg-gray-900 border border-gray-150 dark:border-gray-800 rounded flex items-center justify-center overflow-hidden shrink-0">
+                                    <img v-if="product.image" :src="`/products/${product.id}/image`" class="h-full w-full object-cover" />
                                     <span v-else class="text-xs font-bold text-gray-400 uppercase">{{ product.name.substring(0, 2) }}</span>
                                 </div>
                                 <div>
                                     <p class="font-bold text-gray-900 dark:text-gray-100 max-w-xs truncate">{{ product.name }}</p>
-                                    <p class="text-xs text-gray-400">{{ product.unit.name }}</p>
+                                    <p class="text-xs text-gray-400">{{ product.unit ? product.unit.name : 'Units' }}</p>
                                 </div>
                             </div>
                         </td>
@@ -249,9 +433,9 @@ const formatStock = (value: string, shortName: string) => {
                                         : 'text-gray-900 dark:text-gray-100'
                                 ]"
                             >
-                                {{ formatStock(product.current_stock, product.unit.short_name) }}
+                                {{ formatStock(product.current_stock, product.unit ? product.unit.short_name : '') }}
                             </p>
-                            <p class="text-xs text-gray-400">Alert at: {{ formatStock(product.stock_alert_threshold, product.unit.short_name) }}</p>
+                            <p class="text-xs text-gray-400">Alert at: {{ formatStock(product.stock_alert_threshold, product.unit ? product.unit.short_name : '') }}</p>
                         </td>
                         <td class="px-6 py-4 text-sm whitespace-nowrap">
                             <span
@@ -268,20 +452,46 @@ const formatStock = (value: string, shortName: string) => {
                             </span>
                         </td>
                         <td class="px-6 py-4 text-sm whitespace-nowrap space-x-3">
-                            <button
-                                @click="openEditDrawer(product)"
-                                class="text-xs font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
-                            >
-                                Edit
-                            </button>
-                            <button
-                                @click="deleteProduct(product)"
-                                class="text-xs font-semibold text-red-600 hover:text-red-500 dark:text-red-400"
-                            >
-                                Delete
-                            </button>
+                            <template v-if="currentStatus === 'active'">
+                                <button
+                                    v-if="hasPermission('products.update')"
+                                    @click="openEditDrawer(product)"
+                                    class="text-xs font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                                >
+                                    Edit
+                                </button>
+                                <button
+                                    v-if="hasPermission('products.delete')"
+                                    @click="deleteProduct(product)"
+                                    class="text-xs font-semibold text-red-600 hover:text-red-500 dark:text-red-400"
+                                >
+                                    Move to Trash
+                                </button>
+                            </template>
+
+                            <template v-else>
+                                <button
+                                    v-if="hasPermission('products.restore')"
+                                    @click="restoreProduct(product)"
+                                    class="text-xs font-semibold text-green-600 hover:text-green-500 dark:text-green-400"
+                                >
+                                    Restore
+                                </button>
+                            </template>
                         </td>
                     </tr>
+
+                    <template #header-prepend>
+                        <th class="w-10 pl-6 py-3 text-left">
+                            <input
+                                ref="selectAllRef"
+                                type="checkbox"
+                                :checked="isAllSelected"
+                                @change="toggleSelectAll"
+                                class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-800 dark:bg-gray-900"
+                            />
+                        </th>
+                    </template>
                 </AppTable>
                 <AppPagination :links="products.links" />
             </div>
@@ -345,6 +555,43 @@ const formatStock = (value: string, shortName: string) => {
                 <div class="grid grid-cols-2 gap-4">
                     <AppInput label="Initial Inventory Count" type="number" step="0.001" v-model="form.current_stock" :error="form.errors.current_stock" />
                     <AppInput label="Stock Alert Threshold" type="number" step="0.001" v-model="form.stock_alert_threshold" :error="form.errors.stock_alert_threshold" required />
+                </div>
+
+                <!-- Stock & Tax Configuration Parameters -->
+                <div class="grid grid-cols-2 gap-4 border-t border-gray-200 dark:border-gray-800 pt-4">
+                    <div class="flex items-center space-x-2 pt-2">
+                        <input
+                            type="checkbox"
+                            id="track_stock"
+                            v-model="form.track_stock"
+                            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <label for="track_stock" class="text-sm font-medium text-gray-700 dark:text-gray-300">Track Stock Inventory</label>
+                    </div>
+
+                    <div class="flex items-center space-x-2 pt-2">
+                        <input
+                            type="checkbox"
+                            id="allow_decimal"
+                            v-model="form.allow_decimal"
+                            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <label for="allow_decimal" class="text-sm font-medium text-gray-700 dark:text-gray-300">Allow Fractional Decimals</label>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <AppSelect
+                        label="Tax Treatment"
+                        v-model="form.tax_type"
+                        :options="[
+                            { value: 'exclusive', label: 'Tax Exclusive' },
+                            { value: 'inclusive', label: 'Tax Inclusive' }
+                        ]"
+                        :error="form.errors.tax_type"
+                        required
+                    />
+                    <AppInput label="Tax Rate (%)" type="number" step="0.01" v-model="form.tax_rate" :error="form.errors.tax_rate" />
                 </div>
 
                 <div>

@@ -41,6 +41,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Brands Module
     Route::get('brands/export', [BrandController::class, 'export'])->name('brands.export');
+    Route::get('brands/{brand}/logo', [BrandController::class, 'logo'])->name('brands.logo');
     Route::post('brands/bulk-delete', [BrandController::class, 'bulkDestroy'])->name('brands.bulk-delete');
     Route::post('brands/bulk-restore', [BrandController::class, 'bulkRestore'])->name('brands.bulk-restore');
     Route::post('brands/{id}/restore', [BrandController::class, 'restore'])->name('brands.restore');
@@ -55,6 +56,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Products Module
     Route::get('products/export', [ProductController::class, 'export'])->name('products.export');
+    Route::get('products/{product}/image', [ProductController::class, 'image'])->name('products.image');
     Route::post('products/bulk-delete', [ProductController::class, 'bulkDestroy'])->name('products.bulk-delete');
     Route::post('products/bulk-restore', [ProductController::class, 'bulkRestore'])->name('products.bulk-restore');
     Route::post('products/{id}/restore', [ProductController::class, 'restore'])->name('products.restore');
