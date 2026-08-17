@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
 import { Head, useForm, router, usePage } from '@inertiajs/vue3';
+import { PageProps } from '@/types';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AppCard from '@/Components/AppCard.vue';
 import PageHeader from '@/Components/PageHeader.vue';
@@ -71,9 +72,10 @@ const props = defineProps<{
     };
 }>();
 
-const page = usePage();
-const permissions = computed(() => (page.props.auth as any)?.user?.permissions || []);
-const roles = computed(() => (page.props.auth as any)?.user?.roles || []);
+// Check permissions cleanly with PageProps
+const page = usePage<PageProps>();
+const permissions = computed(() => page.props.auth.permissions || page.props.auth.user?.permissions || []);
+const roles = computed(() => page.props.auth.user?.roles || []);
 const isSuperAdmin = computed(() => roles.value.includes('Super Admin'));
 
 const hasPermission = (permission: string) => {
