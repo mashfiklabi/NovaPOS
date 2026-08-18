@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import { PageProps } from '@/types';
 import Heroicon from '@/Components/Heroicon.vue';
+import { useTheme } from '@/Composables/useTheme';
 
 // Get page props with full type safety
 const page = usePage<PageProps>();
@@ -10,17 +11,22 @@ const authUser = computed(() => page.props.auth.user);
 const settings = computed(() => page.props.settings);
 const navigation = computed(() => page.props.navigation || []);
 
+// Theme composable
+const { theme, isDark, toggleTheme, initTheme } = useTheme();
+
+onMounted(() => {
+    initTheme();
+});
+
 // Navigation states
 const isMobileSidebarOpen = ref(false);
 const isUserDropdownOpen = ref(false);
 
 // Check active route
 const isRouteActive = (route_name: string) => {
-    // If route_name is 'dashboard', match url exactly with /dashboard
     if (route_name === 'dashboard') {
         return page.url === '/dashboard';
     }
-    // E.g. route_name is 'users.index', URL starts with /users
     const prefix = route_name.split('.')[0];
     return page.url.startsWith('/' + prefix);
 };
@@ -42,7 +48,7 @@ const isRouteActive = (route_name: string) => {
                 </Link>
             </div>
 
-            <!-- Navigation Links (Dynamic Spatie permitted) -->
+            <!-- Navigation Links -->
             <nav class="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
                 <Link
                     v-for="item in navigation"
@@ -81,11 +87,9 @@ const isRouteActive = (route_name: string) => {
 
         <!-- Mobile sidebar overlay -->
         <div v-show="isMobileSidebarOpen" class="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true">
-            <!-- Backdrop -->
             <div class="fixed inset-0 bg-gray-600/75 dark:bg-gray-900/80" @click="isMobileSidebarOpen = false" />
 
             <div class="fixed inset-y-0 left-0 flex w-full max-w-xs bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex-col h-full z-50">
-                <!-- Close button -->
                 <div class="h-16 flex items-center justify-between px-6 border-b border-gray-100 dark:border-gray-800">
                     <Link href="/dashboard" class="flex items-center space-x-2" @click="isMobileSidebarOpen = false">
                         <img v-if="settings?.logo" :src="`/storage/${settings.logo}`" class="h-8 w-auto" />
@@ -123,7 +127,6 @@ const isRouteActive = (route_name: string) => {
         <div class="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
             <!-- Top Header Navbar -->
             <header class="h-16 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-30 transition-colors duration-200">
-                <!-- Mobile burger button -->
                 <button
                     type="button"
                     class="lg:hidden text-gray-500 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
@@ -135,13 +138,23 @@ const isRouteActive = (route_name: string) => {
                     </svg>
                 </button>
 
-                <!-- Left navbar spacing/breadcrumb space placeholder -->
                 <div class="hidden sm:block">
                     <span class="text-xs text-gray-400 font-medium">Retail POS & Inventory Core</span>
                 </div>
 
-                <!-- Right profile area -->
-                <div class="flex items-center space-x-4">
+                <!-- Right profile & theme toggle area -->
+                <div class="flex items-center space-x-3">
+                    <!-- Light / Dark theme toggle button -->
+                    <button
+                        type="button"
+                        @click="toggleTheme"
+                        class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none transition-colors"
+                        :title="isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
+                    >
+                        <Heroicon v-if="isDark" name="SunIcon" class="w-5 h-5" />
+                        <Heroicon v-else name="MoonIcon" class="w-5 h-5" />
+                    </button>
+
                     <!-- User drop down menu -->
                     <div class="relative">
                         <button
@@ -158,9 +171,7 @@ const isRouteActive = (route_name: string) => {
                             </div>
                         </button>
 
-                        <!-- Dropdown panel -->
                         <div v-show="isUserDropdownOpen" class="absolute right-0 mt-2 w-48 rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10 z-50">
-                            <!-- Backdrop closer -->
                             <div class="fixed inset-0 z-[-1]" @click="isUserDropdownOpen = false" />
 
                             <Link href="/profile" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" @click="isUserDropdownOpen = false">
@@ -174,12 +185,10 @@ const isRouteActive = (route_name: string) => {
                 </div>
             </header>
 
-            <!-- Main Page Content Section -->
             <main class="flex-1 p-4 sm:p-6 md:p-8">
                 <slot />
             </main>
 
-            <!-- Footer -->
             <footer class="bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 py-4 px-6 text-center text-xs text-gray-500 dark:text-gray-400 flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-1 sm:space-y-0">
                 <p>&copy; {{ new Date().getFullYear() }} {{ settings?.shop_name || 'NovaPOS' }}. All rights reserved.</p>
                 <p>Designed with Stripe & Notion minimalism.</p>

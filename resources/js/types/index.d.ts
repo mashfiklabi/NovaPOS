@@ -8,7 +8,7 @@ export interface User {
     avatar: string | null;
     roles: string[];
     permissions: string[];
-    email_verified_at?: string | null;
+    email_verified_at?: string;
 }
 
 export interface Settings {
@@ -35,7 +35,7 @@ export type PageProps<
     T extends Record<string, unknown> = Record<string, unknown>,
 > = T & {
     auth: {
-        user: User;
+        user: User | null;
         permissions?: string[];
     };
     settings: Settings;
