@@ -48,10 +48,8 @@ class DatabaseSeeder extends Seeder
             'categories.update' => 'Ability to update categories',
             'categories.delete' => 'Ability to delete categories',
             'categories.restore' => 'Ability to restore soft deleted categories',
-            'categories.force_delete' => 'Ability to permanently delete categories',
             'categories.bulk_delete' => 'Ability to bulk delete categories',
             'categories.bulk_restore' => 'Ability to bulk restore categories',
-            'categories.bulk_force_delete' => 'Ability to bulk permanently delete categories',
             'categories.export' => 'Ability to export categories to CSV',
 
             // Master Data - Brands
@@ -60,10 +58,8 @@ class DatabaseSeeder extends Seeder
             'brands.update' => 'Ability to update brands',
             'brands.delete' => 'Ability to delete brands',
             'brands.restore' => 'Ability to restore soft deleted brands',
-            'brands.force_delete' => 'Ability to permanently delete brands',
             'brands.bulk_delete' => 'Ability to bulk delete brands',
             'brands.bulk_restore' => 'Ability to bulk restore brands',
-            'brands.bulk_force_delete' => 'Ability to bulk permanently delete brands',
             'brands.export' => 'Ability to export brands to CSV',
 
             // Master Data - Units
@@ -72,10 +68,8 @@ class DatabaseSeeder extends Seeder
             'units.update' => 'Ability to update units',
             'units.delete' => 'Ability to delete units',
             'units.restore' => 'Ability to restore soft deleted units',
-            'units.force_delete' => 'Ability to permanently delete units',
             'units.bulk_delete' => 'Ability to bulk delete units',
             'units.bulk_restore' => 'Ability to bulk restore units',
-            'units.bulk_force_delete' => 'Ability to bulk permanently delete units',
             'units.export' => 'Ability to export units to CSV',
 
             // Master Data - Products
@@ -84,11 +78,29 @@ class DatabaseSeeder extends Seeder
             'products.update' => 'Ability to update products',
             'products.delete' => 'Ability to delete products',
             'products.restore' => 'Ability to restore soft deleted products',
-            'products.force_delete' => 'Ability to permanently delete products',
             'products.bulk_delete' => 'Ability to bulk delete products',
             'products.bulk_restore' => 'Ability to bulk restore products',
-            'products.bulk_force_delete' => 'Ability to bulk permanently delete products',
             'products.export' => 'Ability to export products to CSV',
+
+            // Sprint 4 - Suppliers
+            'suppliers.view' => 'Ability to view suppliers',
+            'suppliers.create' => 'Ability to create suppliers',
+            'suppliers.update' => 'Ability to update suppliers',
+            'suppliers.delete' => 'Ability to delete suppliers',
+            'suppliers.restore' => 'Ability to restore soft deleted suppliers',
+            'suppliers.bulk_delete' => 'Ability to bulk delete suppliers',
+            'suppliers.bulk_restore' => 'Ability to bulk restore suppliers',
+
+            // Sprint 4 - Purchases
+            'purchases.view' => 'Ability to view purchases',
+            'purchases.create' => 'Ability to create purchases',
+            'purchases.update' => 'Ability to update purchases',
+            'purchases.delete' => 'Ability to delete purchases',
+            'purchases.restore' => 'Ability to restore soft deleted purchases',
+            'purchases.receive' => 'Ability to receive purchase orders and increment stock',
+            'purchases.cancel' => 'Ability to cancel purchase orders',
+            'purchases.bulk_delete' => 'Ability to bulk delete purchases',
+            'purchases.bulk_restore' => 'Ability to bulk restore purchases',
         ];
 
         foreach ($permissions as $name => $description) {
@@ -114,10 +126,8 @@ class DatabaseSeeder extends Seeder
             'categories.update',
             'categories.delete',
             'categories.restore',
-            'categories.force_delete',
             'categories.bulk_delete',
             'categories.bulk_restore',
-            'categories.bulk_force_delete',
             'categories.export',
 
             'brands.view',
@@ -125,10 +135,8 @@ class DatabaseSeeder extends Seeder
             'brands.update',
             'brands.delete',
             'brands.restore',
-            'brands.force_delete',
             'brands.bulk_delete',
             'brands.bulk_restore',
-            'brands.bulk_force_delete',
             'brands.export',
 
             'units.view',
@@ -136,10 +144,8 @@ class DatabaseSeeder extends Seeder
             'units.update',
             'units.delete',
             'units.restore',
-            'units.force_delete',
             'units.bulk_delete',
             'units.bulk_restore',
-            'units.bulk_force_delete',
             'units.export',
 
             'products.view',
@@ -147,11 +153,27 @@ class DatabaseSeeder extends Seeder
             'products.update',
             'products.delete',
             'products.restore',
-            'products.force_delete',
             'products.bulk_delete',
             'products.bulk_restore',
-            'products.bulk_force_delete',
             'products.export',
+
+            'suppliers.view',
+            'suppliers.create',
+            'suppliers.update',
+            'suppliers.delete',
+            'suppliers.restore',
+            'suppliers.bulk_delete',
+            'suppliers.bulk_restore',
+
+            'purchases.view',
+            'purchases.create',
+            'purchases.update',
+            'purchases.delete',
+            'purchases.restore',
+            'purchases.receive',
+            'purchases.cancel',
+            'purchases.bulk_delete',
+            'purchases.bulk_restore',
         ]);
 
         $cashierRole = Role::findOrCreate('Cashier', 'web');
@@ -161,6 +183,8 @@ class DatabaseSeeder extends Seeder
             'brands.view',
             'units.view',
             'products.view',
+            'suppliers.view',
+            'purchases.view',
         ]);
 
         // 3. Seed Default Super Admin User
@@ -265,7 +289,7 @@ class DatabaseSeeder extends Seeder
             Setting::create($item);
         }
 
-        // 5. Seed some basic Category, Brand, and Unit values for easier setup
+        // 5. Seed Category, Brand, and Unit values
         \DB::table('categories')->insert([
             [
                 'id' => 1,
@@ -355,6 +379,25 @@ class DatabaseSeeder extends Seeder
                 'current_stock' => 12.000,
                 'image' => null,
                 'status' => 'active',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        // 6. Seed Supplier
+        \DB::table('suppliers')->insert([
+            [
+                'id' => 1,
+                'uuid' => (string) Str::uuid(),
+                'name' => 'Tech Logistics Ltd',
+                'contact_person' => 'Robert Logistics',
+                'phone' => '+1 (555) 019-3333',
+                'email' => 'sales@techlogistics.com',
+                'address' => '456 Warehouse Blvd, Logistics City',
+                'tax_number' => 'VAT-99887766',
+                'opening_balance' => 0.00,
+                'status' => 'active',
+                'notes' => 'Primary hardware distributor',
                 'created_at' => now(),
                 'updated_at' => now(),
             ],

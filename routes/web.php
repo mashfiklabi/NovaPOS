@@ -8,8 +8,10 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SettingController;
+use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\UnitController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -59,6 +61,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('products/bulk-restore', [ProductController::class, 'bulkRestore'])->name('products.bulk-restore');
     Route::post('products/{id}/restore', [ProductController::class, 'restore'])->name('products.restore');
     Route::resource('products', ProductController::class)->except(['create', 'edit', 'show']);
+
+    // Suppliers Module
+    Route::get('suppliers/export', [SupplierController::class, 'export'])->name('suppliers.export');
+    Route::post('suppliers/bulk-delete', [SupplierController::class, 'bulkDestroy'])->name('suppliers.bulk-delete');
+    Route::post('suppliers/bulk-restore', [SupplierController::class, 'bulkRestore'])->name('suppliers.bulk-restore');
+    Route::post('suppliers/{id}/restore', [SupplierController::class, 'restore'])->name('suppliers.restore');
+    Route::resource('suppliers', SupplierController::class)->except(['create', 'edit', 'show']);
+
+    // Purchases Module
+    Route::get('purchases/export', [PurchaseController::class, 'export'])->name('purchases.export');
+    Route::post('purchases/bulk-delete', [PurchaseController::class, 'bulkDestroy'])->name('purchases.bulk-delete');
+    Route::post('purchases/bulk-restore', [PurchaseController::class, 'bulkRestore'])->name('purchases.bulk-restore');
+    Route::post('purchases/{id}/restore', [PurchaseController::class, 'restore'])->name('purchases.restore');
+    Route::post('purchases/{purchase}/receive', [PurchaseController::class, 'receive'])->name('purchases.receive');
+    Route::post('purchases/{purchase}/cancel', [PurchaseController::class, 'cancel'])->name('purchases.cancel');
+    Route::resource('purchases', PurchaseController::class);
 
     // Roles & Permissions Module
     Route::resource('roles', RoleController::class)->except(['create', 'edit', 'show']);

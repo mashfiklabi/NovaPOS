@@ -34,6 +34,18 @@ return [
         'permission' => 'units.view',
     ],
     [
+        'title' => 'Suppliers',
+        'route' => 'suppliers.index',
+        'icon' => 'BuildingOfficeIcon',
+        'permission' => 'suppliers.view',
+    ],
+    [
+        'title' => 'Purchases',
+        'route' => 'purchases.index',
+        'icon' => 'ShoppingBagIcon',
+        'permission' => 'purchases.view',
+    ],
+    [
         'title' => 'Users',
         'route' => 'users.index',
         'icon' => 'UsersIcon',

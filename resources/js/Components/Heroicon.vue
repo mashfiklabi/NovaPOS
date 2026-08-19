@@ -56,6 +56,16 @@ const svgClass = computed(() => props.class || 'h-5 w-5');
         <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m16.5 0a2.25 2.25 0 00-2.25-2.25H6a2.25 2.25 0 00-2.25 2.25m16.5 0V6a2.25 2.25 0 00-2.25-2.25H6A2.25 2.25 0 003.75 6v1.5m10.5 5.25v3m-3-3v3" />
     </svg>
 
+    <!-- BuildingOfficeIcon -->
+    <svg v-else-if="name === 'BuildingOfficeIcon'" :class="svgClass" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5s.75 0 .75.75v1.5c0 .75-.75.75-.75.75H9c-.75 0-.75-.75-.75-.75v-1.5c0-.75.75-.75.75-.75zm4.5 0h1.5c.75 0 .75.75.75.75v1.5c0 .75-.75.75-.75.75h-1.5c-.75 0-.75-.75-.75-.75v-1.5c0-.75.75-.75.75-.75zm-4.5 6h1.5c.75 0 .75.75.75.75v1.5c0 .75-.75.75-.75.75H9c-.75 0-.75-.75-.75-.75v-1.5c0-.75.75-.75.75-.75zm4.5 0h1.5c.75 0 .75.75.75.75v1.5c0 .75-.75.75-.75.75h-1.5c-.75 0-.75-.75-.75-.75v-1.5c0-.75.75-.75.75-.75z" />
+    </svg>
+
+    <!-- ShoppingBagIcon -->
+    <svg v-else-if="name === 'ShoppingBagIcon'" :class="svgClass" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.25 10.5a.75.75 0 100-1.5.75.75 0 000 1.5zm7.5 0a.75.75 0 100-1.5.75.75 0 000 1.5z" />
+    </svg>
+
     <!-- Default generic icon -->
     <svg v-else :class="svgClass" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 21m0 0l-.813-5.096M9 21h3.75m-6.75 0h-.75m3-9v3.75m0-3.75a1.125 1.125 0 112.25 0V15m-2.25-3.75a1.125 1.125 0 10-2.25 0V15m2.25-6.75A1.125 1.125 0 1112 9v3.75m-3-3.75a1.125 1.125 0 10-2.25 0v3.75m10.5-6a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
