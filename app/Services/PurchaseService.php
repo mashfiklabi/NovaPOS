@@ -281,17 +281,17 @@ class PurchaseService
             if ($product->track_stock) {
                 $product->increment('current_stock', $item->quantity);
                 $product->refresh();
-            }
 
-            StockMovement::create([
-                'product_id' => $product->id,
-                'created_by' => Auth::id(),
-                'movement_type' => StockMovementType::IN,
-                'quantity' => $item->quantity,
-                'reference_type' => Purchase::class,
-                'reference_id' => $purchase->id,
-                'balance_after' => $product->current_stock,
-            ]);
+                StockMovement::create([
+                    'product_id' => $product->id,
+                    'created_by' => Auth::id(),
+                    'movement_type' => StockMovementType::IN,
+                    'quantity' => $item->quantity,
+                    'reference_type' => Purchase::class,
+                    'reference_id' => $purchase->id,
+                    'balance_after' => $product->current_stock,
+                ]);
+            }
         }
     }
 }

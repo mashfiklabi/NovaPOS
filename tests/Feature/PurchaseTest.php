@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Enums\PaymentStatus;
 use App\Enums\PurchaseStatus;
 use App\Enums\StockMovementType;
 use App\Models\Product;
 use App\Models\Purchase;
+use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -40,6 +42,7 @@ class PurchaseTest extends TestCase
             'track_stock' => true,
             'current_stock' => 10,
             'cost_price' => 50.00,
+            'allow_decimal' => false,
         ]);
     }
 
@@ -94,6 +97,54 @@ class PurchaseTest extends TestCase
         $this->assertEquals(10, $this->product->fresh()->current_stock);
     }
 
+    public function test_create_purchase_with_multiple_items_calculates_server_side_totals(): void
+    {
+        $product2 = Product::factory()->create([
+            'status' => 'active',
+            'track_stock' => true,
+            'current_stock' => 5,
+            'cost_price' => 100.00,
+        ]);
+
+        $payload = [
+            'supplier_id' => $this->supplier->id,
+            'purchase_date' => now()->format('Y-m-d'),
+            'status' => 'draft',
+            'items' => [
+                [
+                    'product_id' => $this->product->id,
+                    'quantity' => 2,
+                    'unit_cost' => 50.00,
+                    'discount_amount' => 10.00,
+                    'tax_amount' => 5.00,
+                ], // Line total: (2*50) - 10 + 5 = 95.00
+                [
+                    'product_id' => $product2->id,
+                    'quantity' => 1,
+                    'unit_cost' => 100.00,
+                    'discount_amount' => 0,
+                    'tax_amount' => 10.00,
+                ], // Line total: (1*100) + 10 = 110.00
+            ], // Subtotal: 95 + 110 = 205.00
+            'discount_amount' => 5.00,
+            'tax_amount' => 10.00,
+            'shipping_cost' => 15.00, // Grand total: 205 - 5 + 10 + 15 = 225.00
+            'paid_amount' => 100.00, // Due: 125.00, PaymentStatus: PARTIAL
+        ];
+
+        $response = $this->actingAs($this->adminUser)->post(route('purchases.store'), $payload);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('purchases', [
+            'supplier_id' => $this->supplier->id,
+            'subtotal' => 205.00,
+            'grand_total' => 225.00,
+            'paid_amount' => 100.00,
+            'due_amount' => 125.00,
+            'payment_status' => PaymentStatus::PARTIAL->value,
+        ]);
+    }
+
     public function test_receiving_purchase_increments_stock_and_creates_stock_movement(): void
     {
         $purchase = Purchase::factory()->create([
@@ -118,14 +169,48 @@ class PurchaseTest extends TestCase
         // Product stock should increment from 10 to 25
         $this->assertEquals(25, $this->product->fresh()->current_stock);
 
-        // StockMovement entry recorded
+        // StockMovement entry recorded with exact balance_after
         $this->assertDatabaseHas('stock_movements', [
             'product_id' => $this->product->id,
             'movement_type' => StockMovementType::IN->value,
             'quantity' => 15,
+            'balance_after' => 25.00,
             'reference_type' => Purchase::class,
             'reference_id' => $purchase->id,
         ]);
+
+        // Exactly 1 StockMovement record created
+        $this->assertEquals(1, StockMovement::where('product_id', $this->product->id)->count());
+    }
+
+    public function test_receiving_purchase_for_non_stock_product_does_not_increment_stock_or_create_movement(): void
+    {
+        $serviceProduct = Product::factory()->create([
+            'status' => 'active',
+            'track_stock' => false,
+            'current_stock' => 0,
+            'cost_price' => 25.00,
+        ]);
+
+        $purchase = Purchase::factory()->create([
+            'supplier_id' => $this->supplier->id,
+            'status' => PurchaseStatus::DRAFT,
+        ]);
+
+        $purchase->items()->create([
+            'product_id' => $serviceProduct->id,
+            'quantity' => 10,
+            'unit_cost' => 25.00,
+            'discount_amount' => 0,
+            'tax_amount' => 0,
+            'total' => 250.00,
+        ]);
+
+        $response = $this->actingAs($this->adminUser)->post(route('purchases.receive', $purchase));
+
+        $response->assertRedirect();
+        $this->assertEquals(0, $serviceProduct->fresh()->current_stock);
+        $this->assertEquals(0, StockMovement::where('product_id', $serviceProduct->id)->count());
     }
 
     public function test_cannot_receive_already_received_purchase(): void
@@ -139,6 +224,27 @@ class PurchaseTest extends TestCase
 
         $response->assertRedirect();
         $response->assertSessionHasErrors(['error']);
+    }
+
+    public function test_decimal_quantity_validation_respects_allow_decimal_flag(): void
+    {
+        // $this->product has allow_decimal = false
+        $payload = [
+            'supplier_id' => $this->supplier->id,
+            'purchase_date' => now()->format('Y-m-d'),
+            'status' => 'draft',
+            'items' => [
+                [
+                    'product_id' => $this->product->id,
+                    'quantity' => 2.5, // Invalid decimal quantity
+                    'unit_cost' => 50.00,
+                ],
+            ],
+        ];
+
+        $response = $this->actingAs($this->adminUser)->post(route('purchases.store'), $payload);
+
+        $response->assertSessionHasErrors(['items.0.quantity']);
     }
 
     public function test_can_cancel_draft_purchase(): void
