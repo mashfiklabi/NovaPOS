@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Models\Product;
-use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdatePurchaseRequest extends FormRequest
@@ -16,7 +15,7 @@ class UpdatePurchaseRequest extends FormRequest
     }
 
     /**
-     * @return array<string, ValidationRule|array<mixed>|string>
+     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
@@ -55,7 +54,7 @@ class UpdatePurchaseRequest extends FormRequest
                 $product = Product::find($item['product_id']);
                 if ($product && ! $product->allow_decimal) {
                     $qty = (float) $item['quantity'];
-                    if (floor($qty) != $qty) {
+                    if (floor($qty) != $qty || $qty < 1) {
                         $validator->errors()->add(
                             "items.{$index}.quantity",
                             "Product '{$product->name}' does not allow fractional/decimal quantities."

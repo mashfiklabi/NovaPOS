@@ -272,7 +272,7 @@ const formatCurrency = (amount: number) => {
                                         <input
                                             type="number"
                                             :step="item.allow_decimal ? '0.001' : '1'"
-                                            min="0.001"
+                                            :min="item.allow_decimal ? '0.001' : '1'"
                                             v-model.number="item.quantity"
                                             class="w-full rounded-md border-gray-300 dark:border-gray-800 dark:bg-gray-900 text-sm focus:border-indigo-500 focus:ring-indigo-500"
                                         />
