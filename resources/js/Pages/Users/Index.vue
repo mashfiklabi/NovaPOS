@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
-import { Head, useForm, router } from '@inertiajs/vue3';
+import { ref, watch, computed } from 'vue';
+import { Head, useForm, router, usePage } from '@inertiajs/vue3';
+import { PageProps } from '@/types';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AppCard from '@/Components/AppCard.vue';
 import PageHeader from '@/Components/PageHeader.vue';
@@ -39,6 +40,9 @@ const props = defineProps<{
         search: string | null;
     };
 }>();
+
+const page = usePage<PageProps>();
+const authUserId = computed(() => page.props.auth.user?.id);
 
 // Search filtration
 const search = ref(props.filters.search || '');
@@ -200,7 +204,7 @@ const deleteUser = (user: User) => {
                                 Edit
                             </button>
                             <button
-                                v-if="$page.props.auth.user.id !== user.id"
+                                v-if="authUserId !== user.id"
                                 @click="deleteUser(user)"
                                 class="text-xs font-semibold text-red-600 hover:text-red-500 dark:text-red-400"
                             >

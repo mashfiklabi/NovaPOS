@@ -13,6 +13,10 @@ defineProps<{
 
 const user = usePage<PageProps>().props.auth.user;
 
+if (!user) {
+    throw new Error('Authenticated user is required for profile information update.');
+}
+
 const form = useForm({
     _method: 'PATCH',
     name: user.name,
