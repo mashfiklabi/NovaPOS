@@ -6,6 +6,7 @@ use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\BrandController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PurchaseController;
@@ -76,10 +77,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('purchases/{id}/restore', [PurchaseController::class, 'restore'])->name('purchases.restore');
     Route::post('purchases/{purchase}/receive', [PurchaseController::class, 'receive'])->name('purchases.receive');
     Route::post('purchases/{purchase}/cancel', [PurchaseController::class, 'cancel'])->name('purchases.cancel');
+    Route::post('purchases/{purchase}/pay', [PurchaseController::class, 'pay'])->name('purchases.pay');
     Route::resource('purchases', PurchaseController::class);
 
     // Roles & Permissions Module
     Route::resource('roles', RoleController::class)->except(['create', 'edit', 'show']);
+
+    // Notifications Module
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])->name('notifications.read-all');
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
 
     // System Settings Module
     Route::get('/settings', [SettingController::class, 'index'])->name('settings.index');

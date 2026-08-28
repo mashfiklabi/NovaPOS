@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
-import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, usePage, useForm } from '@inertiajs/vue3';
 import { PageProps } from '@/types';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AppCard from '@/Components/AppCard.vue';
@@ -11,6 +11,9 @@ import SearchInput from '@/Components/SearchInput.vue';
 import EmptyState from '@/Components/EmptyState.vue';
 import AppButton from '@/Components/AppButton.vue';
 import AppSelect from '@/Components/AppSelect.vue';
+import AppModal from '@/Components/AppModal.vue';
+import AppInput from '@/Components/AppInput.vue';
+import Heroicon from '@/Components/Heroicon.vue';
 
 interface Supplier {
     id: number;
@@ -203,6 +206,33 @@ const exportCSV = () => {
 const formatCurrency = (amount: string | number) => {
     return Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
+
+// Payment Modal State
+const paymentPurchase = ref<Purchase | null>(null);
+const paymentForm = useForm({
+    amount: 0,
+});
+
+const openPaymentModal = (purchase: Purchase) => {
+    paymentPurchase.value = purchase;
+    paymentForm.reset();
+    paymentForm.clearErrors();
+    paymentForm.amount = Number(purchase.due_amount);
+};
+
+const submitPayment = () => {
+    if (!paymentPurchase.value) return;
+    paymentForm.post(`/purchases/${paymentPurchase.value.id}/pay`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            paymentPurchase.value = null;
+            paymentForm.reset();
+        },
+        onError: (err) => {
+            if (err.error) alert(err.error);
+        }
+    });
+};
 </script>
 
 <template>
@@ -389,41 +419,37 @@ const formatCurrency = (amount: string | number) => {
                                 <button
                                     v-if="hasPermission('purchases.restore')"
                                     @click="restorePurchase(purchase)"
-                                    class="text-xs font-semibold text-green-600 hover:text-green-500 dark:text-green-400"
+                                    class="p-1 text-emerald-600 hover:text-emerald-500 dark:text-emerald-400 rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+                                    title="Restore Purchase Order"
                                 >
-                                    Restore
+                                    <Heroicon name="ArrowPathIcon" class="h-4 w-4" />
                                 </button>
                             </template>
                             <template v-else>
                                 <Link
                                     :href="`/purchases/${purchase.id}`"
-                                    class="text-xs font-semibold text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+                                    class="inline-block p-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                                    title="View Purchase Order"
                                 >
-                                    View
+                                    <Heroicon name="EyeIcon" class="h-4 w-4" />
                                 </Link>
 
                                 <button
-                                    v-if="purchase.status === 'draft' && hasPermission('purchases.receive')"
-                                    @click="receivePurchase(purchase)"
-                                    class="text-xs font-semibold text-green-600 hover:text-green-500 dark:text-green-400"
+                                    v-if="Number(purchase.due_amount) > 0 && hasPermission('purchases.update')"
+                                    @click="openPaymentModal(purchase)"
+                                    class="p-1 text-emerald-600 hover:text-emerald-500 dark:text-emerald-400 rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+                                    title="Record Payment"
                                 >
-                                    Receive
-                                </button>
-
-                                <button
-                                    v-if="purchase.status === 'draft' && hasPermission('purchases.cancel')"
-                                    @click="cancelPurchase(purchase)"
-                                    class="text-xs font-semibold text-yellow-600 hover:text-yellow-500 dark:text-yellow-400"
-                                >
-                                    Cancel
+                                    <Heroicon name="BanknotesIcon" class="h-4 w-4" />
                                 </button>
 
                                 <button
                                     v-if="hasPermission('purchases.delete')"
                                     @click="deletePurchase(purchase)"
-                                    class="text-xs font-semibold text-red-600 hover:text-red-500 dark:text-red-400"
+                                    class="p-1 text-red-600 hover:text-red-500 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                                    title="Move to Trash"
                                 >
-                                    Trash
+                                    <Heroicon name="TrashIcon" class="h-4 w-4" />
                                 </button>
                             </template>
                         </td>
@@ -444,5 +470,37 @@ const formatCurrency = (amount: string | number) => {
                 <AppPagination :links="purchases.links" />
             </div>
         </AppCard>
+
+        <!-- Record Payment Modal -->
+        <AppModal
+            :show="paymentPurchase !== null"
+            title="Record Purchase Payment"
+            @close="paymentPurchase = null"
+        >
+            <form @submit.prevent="submitPayment" class="space-y-4">
+                <div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                        Recording payment for PO <strong>#{{ paymentPurchase?.po_number }}</strong>
+                    </p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                        Total: <strong>${{ formatCurrency(paymentPurchase?.grand_total || 0) }}</strong> | Paid: <strong>${{ formatCurrency(paymentPurchase?.paid_amount || 0) }}</strong> | Balance Due: <strong class="text-red-600 dark:text-red-400">${{ formatCurrency(paymentPurchase?.due_amount || 0) }}</strong>
+                    </p>
+                    <AppInput
+                        label="Payment Amount ($)"
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        :max="paymentPurchase?.due_amount"
+                        v-model.number="paymentForm.amount"
+                        :error="paymentForm.errors.amount"
+                        required
+                    />
+                </div>
+                <div class="flex justify-end space-x-2 pt-3">
+                    <AppButton variant="secondary" @click="paymentPurchase = null">Cancel</AppButton>
+                    <AppButton variant="primary" :loading="paymentForm.processing" @click="submitPayment">Save Payment</AppButton>
+                </div>
+            </form>
+        </AppModal>
     </AppLayout>
 </template>

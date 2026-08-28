@@ -5,17 +5,19 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Models\Product;
+use App\Models\Purchase;
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StorePurchaseRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('create', \App\Models\Purchase::class) ?? false;
+        return $this->user()?->can('create', Purchase::class) ?? false;
     }
 
     /**
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {

@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
+import { Head, Link, router, usePage, useForm } from '@inertiajs/vue3';
 import { PageProps } from '@/types';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AppCard from '@/Components/AppCard.vue';
 import PageHeader from '@/Components/PageHeader.vue';
 import AppButton from '@/Components/AppButton.vue';
+import AppModal from '@/Components/AppModal.vue';
+import AppInput from '@/Components/AppInput.vue';
 
 interface Product {
     id: number;
@@ -78,6 +80,23 @@ const formatCurrency = (amount: string | number) => {
     return Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
+const isPaymentModalOpen = ref(false);
+const paymentForm = useForm({
+    amount: Number(props.purchase.due_amount),
+});
+
+const submitPayment = () => {
+    paymentForm.post(`/purchases/${props.purchase.id}/pay`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            isPaymentModalOpen.value = false;
+        },
+        onError: (err) => {
+            if (err.error) alert(err.error);
+        }
+    });
+};
+
 const receivePurchase = () => {
     if (confirm(`Are you sure you want to mark PO #${props.purchase.po_number} as RECEIVED? Stock levels will be incremented.`)) {
         router.post(`/purchases/${props.purchase.id}/receive`, {}, {
@@ -120,6 +139,16 @@ const deletePurchase = () => {
                     >
                         Back to List
                     </Link>
+
+                    <AppButton
+                        v-if="Number(purchase.due_amount) > 0 && hasPermission('purchases.update')"
+                        variant="primary"
+                        size="sm"
+                        class="!bg-emerald-600 hover:!bg-emerald-500"
+                        @click="isPaymentModalOpen = true"
+                    >
+                        Record Payment
+                    </AppButton>
 
                     <Link
                         v-if="purchase.status === 'draft' && hasPermission('purchases.update')"
@@ -319,5 +348,37 @@ const deletePurchase = () => {
                 </AppCard>
             </div>
         </div>
+
+        <!-- Record Payment Modal -->
+        <AppModal
+            :show="isPaymentModalOpen"
+            title="Record Purchase Payment"
+            @close="isPaymentModalOpen = false"
+        >
+            <form @submit.prevent="submitPayment" class="space-y-4">
+                <div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                        Recording payment for PO <strong>#{{ purchase.po_number }}</strong>
+                    </p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                        Total: <strong>${{ formatCurrency(purchase.grand_total) }}</strong> | Paid: <strong>${{ formatCurrency(purchase.paid_amount) }}</strong> | Balance Due: <strong class="text-red-600 dark:text-red-400">${{ formatCurrency(purchase.due_amount) }}</strong>
+                    </p>
+                    <AppInput
+                        label="Payment Amount ($)"
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        :max="purchase.due_amount"
+                        v-model.number="paymentForm.amount"
+                        :error="paymentForm.errors.amount"
+                        required
+                    />
+                </div>
+                <div class="flex justify-end space-x-2 pt-3">
+                    <AppButton variant="secondary" @click="isPaymentModalOpen = false">Cancel</AppButton>
+                    <AppButton variant="primary" :loading="paymentForm.processing" @click="submitPayment">Save Payment</AppButton>
+                </div>
+            </form>
+        </AppModal>
     </AppLayout>
 </template>

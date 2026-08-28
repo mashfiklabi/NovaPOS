@@ -9,6 +9,7 @@ import AppDrawer from '@/Components/AppDrawer.vue';
 import AppInput from '@/Components/AppInput.vue';
 import AppButton from '@/Components/AppButton.vue';
 import EmptyState from '@/Components/EmptyState.vue';
+import Heroicon from '@/Components/Heroicon.vue';
 
 interface Permission {
     id: number;
@@ -126,19 +127,21 @@ const deleteRole = (role: Role) => {
                                 <span v-if="role.permissions.length === 0" class="text-xs text-gray-400 italic">No permissions assigned</span>
                             </div>
                         </td>
-                        <td class="px-6 py-4 text-sm whitespace-nowrap space-x-3">
+                        <td class="px-6 py-4 text-sm whitespace-nowrap space-x-2">
                             <button
                                 @click="openEditDrawer(role)"
-                                class="text-xs font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                                class="p-1 text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"
+                                title="Edit Role"
                             >
-                                Edit Role
+                                <Heroicon name="PencilIcon" class="h-4 w-4" />
                             </button>
                             <button
                                 v-if="role.name !== 'Super Admin'"
                                 @click="deleteRole(role)"
-                                class="text-xs font-semibold text-red-600 hover:text-red-500 dark:text-red-400"
+                                class="p-1 text-red-600 hover:text-red-500 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                                title="Delete Role"
                             >
-                                Delete
+                                <Heroicon name="TrashIcon" class="h-4 w-4" />
                             </button>
                         </td>
                     </tr>

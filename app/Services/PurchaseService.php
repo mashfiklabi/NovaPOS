@@ -50,6 +50,12 @@ class PurchaseService
                 $this->processStockForReceivedPurchase($purchase);
             }
 
+            NotificationService::notifyAdminsAndManagers(
+                'New Purchase Order',
+                "Created PO #{$purchase->po_number} totaling \${$purchase->grand_total}",
+                "/purchases/{$purchase->id}"
+            );
+
             return $purchase->load('items.product', 'supplier');
         });
     }
@@ -100,6 +106,44 @@ class PurchaseService
     }
 
     /**
+     * Record a payment for an outstanding purchase order.
+     */
+    public function recordPayment(Purchase $purchase, float $amount): Purchase
+    {
+        return DB::transaction(function () use ($purchase, $amount) {
+            if ($amount <= 0) {
+                throw new InvalidArgumentException('Payment amount must be greater than zero.');
+            }
+
+            if ($amount > (float) $purchase->due_amount) {
+                throw new InvalidArgumentException('Payment amount cannot exceed the balance due.');
+            }
+
+            $newPaid = round((float) $purchase->paid_amount + $amount, 2);
+            $newDue = round((float) $purchase->grand_total - $newPaid, 2);
+            if ($newDue < 0) {
+                $newDue = 0.0;
+            }
+
+            $newPaymentStatus = $newDue <= 0 ? PaymentStatus::PAID : PaymentStatus::PARTIAL;
+
+            $purchase->update([
+                'paid_amount' => $newPaid,
+                'due_amount' => $newDue,
+                'payment_status' => $newPaymentStatus,
+            ]);
+
+            NotificationService::notifyAdminsAndManagers(
+                'Purchase Payment Recorded',
+                "Recorded payment of \${$amount} for PO #{$purchase->po_number}. Remaining due: \${$newDue}",
+                "/purchases/{$purchase->id}"
+            );
+
+            return $purchase->fresh();
+        });
+    }
+
+    /**
      * Mark a purchase order as RECEIVED and increment product stock.
      */
     public function receive(Purchase $purchase): Purchase
@@ -119,6 +163,12 @@ class PurchaseService
 
             $this->processStockForReceivedPurchase($purchase);
 
+            NotificationService::notifyAdminsAndManagers(
+                'Purchase Order Received',
+                "PO #{$purchase->po_number} marked as RECEIVED and inventory stock updated.",
+                "/purchases/{$purchase->id}"
+            );
+
             return $purchase->fresh(['items.product', 'supplier']);
         });
     }
@@ -136,6 +186,12 @@ class PurchaseService
             $purchase->update([
                 'status' => PurchaseStatus::CANCELLED,
             ]);
+
+            NotificationService::notifyAdminsAndManagers(
+                'Purchase Order Cancelled',
+                "PO #{$purchase->po_number} was CANCELLED.",
+                "/purchases/{$purchase->id}"
+            );
 
             return $purchase;
         });

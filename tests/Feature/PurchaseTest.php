@@ -183,6 +183,52 @@ class PurchaseTest extends TestCase
         $this->assertEquals(1, StockMovement::where('product_id', $this->product->id)->count());
     }
 
+    public function test_can_record_payment_for_received_purchase_and_update_due_and_payment_status(): void
+    {
+        $purchase = Purchase::factory()->create([
+            'supplier_id' => $this->supplier->id,
+            'status' => PurchaseStatus::RECEIVED,
+            'grand_total' => 500.00,
+            'paid_amount' => 0.00,
+            'due_amount' => 500.00,
+            'payment_status' => PaymentStatus::UNPAID,
+        ]);
+
+        // Partial payment of $200
+        $response1 = $this->actingAs($this->adminUser)->post(route('purchases.pay', $purchase), ['amount' => 200.00]);
+        $response1->assertRedirect();
+
+        $fresh = $purchase->fresh();
+        $this->assertEquals(200.00, $fresh->paid_amount);
+        $this->assertEquals(300.00, $fresh->due_amount);
+        $this->assertEquals(PaymentStatus::PARTIAL, $fresh->payment_status);
+
+        // Remaining payment of $300
+        $response2 = $this->actingAs($this->adminUser)->post(route('purchases.pay', $purchase), ['amount' => 300.00]);
+        $response2->assertRedirect();
+
+        $fullyPaid = $purchase->fresh();
+        $this->assertEquals(500.00, $fullyPaid->paid_amount);
+        $this->assertEquals(0.00, $fullyPaid->due_amount);
+        $this->assertEquals(PaymentStatus::PAID, $fullyPaid->payment_status);
+    }
+
+    public function test_cannot_record_payment_exceeding_due_amount(): void
+    {
+        $purchase = Purchase::factory()->create([
+            'supplier_id' => $this->supplier->id,
+            'status' => PurchaseStatus::RECEIVED,
+            'grand_total' => 500.00,
+            'paid_amount' => 400.00,
+            'due_amount' => 100.00,
+            'payment_status' => PaymentStatus::PARTIAL,
+        ]);
+
+        $response = $this->actingAs($this->adminUser)->post(route('purchases.pay', $purchase), ['amount' => 200.00]);
+        $response->assertSessionHasErrors(['amount']);
+        $this->assertEquals(100.00, $purchase->fresh()->due_amount);
+    }
+
     public function test_receiving_purchase_for_non_stock_product_does_not_increment_stock_or_create_movement(): void
     {
         $serviceProduct = Product::factory()->create([

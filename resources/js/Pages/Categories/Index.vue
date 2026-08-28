@@ -14,6 +14,7 @@ import AppInput from '@/Components/AppInput.vue';
 import AppButton from '@/Components/AppButton.vue';
 import AppSelect from '@/Components/AppSelect.vue';
 import AppTextarea from '@/Components/AppTextarea.vue';
+import Heroicon from '@/Components/Heroicon.vue';
 
 interface Category {
     id: number;
@@ -366,30 +367,33 @@ const exportCSV = () => {
                             </span>
                         </td>
                         <!-- Actions column -->
-                        <td class="px-6 py-4 text-sm whitespace-nowrap space-x-3">
+                        <td class="px-6 py-4 text-sm whitespace-nowrap space-x-2">
                             <template v-if="activeTab === 'trash'">
                                 <button
                                     v-if="hasPermission('categories.restore')"
                                     @click="restoreCategory(category)"
-                                    class="text-xs font-semibold text-green-600 hover:text-green-500 dark:text-green-400"
+                                    class="p-1 text-emerald-600 hover:text-emerald-500 dark:text-emerald-400 rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+                                    title="Restore Category"
                                 >
-                                    Restore
+                                    <Heroicon name="ArrowPathIcon" class="h-4 w-4" />
                                 </button>
                             </template>
                             <template v-else>
                                 <button
                                     v-if="hasPermission('categories.update')"
                                     @click="openEditDrawer(category)"
-                                    class="text-xs font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                                    class="p-1 text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"
+                                    title="Edit Category"
                                 >
-                                    Edit
+                                    <Heroicon name="PencilIcon" class="h-4 w-4" />
                                 </button>
                                 <button
                                     v-if="hasPermission('categories.delete')"
                                     @click="deleteCategory(category)"
-                                    class="text-xs font-semibold text-red-600 hover:text-red-500 dark:text-red-400"
+                                    class="p-1 text-red-600 hover:text-red-500 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                                    title="Move to Trash"
                                 >
-                                    Move to Trash
+                                    <Heroicon name="TrashIcon" class="h-4 w-4" />
                                 </button>
                             </template>
                         </td>

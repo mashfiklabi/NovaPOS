@@ -45,9 +45,30 @@ class HandleInertiaRequests extends Middleware
             $navigation = (new NavigationService)->getNavigation();
         }
 
+        $notifications = [];
+        $unreadNotificationsCount = 0;
+        if ($user && ($user->hasRole('Super Admin') || $user->hasRole('Manager'))) {
+            try {
+                $unreadNotificationsCount = $user->unreadNotifications()->count();
+                $notifications = $user->notifications()->take(10)->get()->map(function ($n) {
+                    return [
+                        'id' => $n->id,
+                        'title' => $n->data['title'] ?? 'Notification',
+                        'message' => $n->data['message'] ?? '',
+                        'url' => $n->data['url'] ?? null,
+                        'read' => $n->read_at !== null,
+                        'created_at' => $n->created_at ? $n->created_at->diffForHumans() : '',
+                    ];
+                })->toArray();
+            } catch (\Throwable $e) {
+                // Table not migrated yet
+            }
+        }
+
         return [
             ...parent::share($request),
             'auth' => [
+                'can_view_notifications' => $user ? ($user->hasRole('Super Admin') || $user->hasRole('Manager')) : false,
                 'user' => $user ? [
                     'id' => $user->id,
                     'uuid' => $user->uuid,
@@ -61,6 +82,8 @@ class HandleInertiaRequests extends Middleware
                 ] : null,
             ],
             'navigation' => $navigation,
+            'notifications' => $notifications,
+            'unread_notifications_count' => $unreadNotificationsCount,
             'settings' => [
                 'shop_name' => $settings['shop_name'] ?? 'NovaPOS',
                 'currency' => $settings['currency'] ?? 'USD',

@@ -13,6 +13,7 @@ import EmptyState from '@/Components/EmptyState.vue';
 import AppInput from '@/Components/AppInput.vue';
 import AppButton from '@/Components/AppButton.vue';
 import AppSelect from '@/Components/AppSelect.vue';
+import Heroicon from '@/Components/Heroicon.vue';
 
 interface Role {
     id: number;
@@ -196,19 +197,21 @@ const deleteUser = (user: User) => {
                                 {{ user.status }}
                             </span>
                         </td>
-                        <td class="px-6 py-4 text-sm whitespace-nowrap space-x-3">
+                        <td class="px-6 py-4 text-sm whitespace-nowrap space-x-2">
                             <button
                                 @click="openEditDrawer(user)"
-                                class="text-xs font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                                class="p-1 text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"
+                                title="Edit User"
                             >
-                                Edit
+                                <Heroicon name="PencilIcon" class="h-4 w-4" />
                             </button>
                             <button
                                 v-if="authUserId !== user.id"
                                 @click="deleteUser(user)"
-                                class="text-xs font-semibold text-red-600 hover:text-red-500 dark:text-red-400"
+                                class="p-1 text-red-600 hover:text-red-500 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                                title="Delete User"
                             >
-                                Delete
+                                <Heroicon name="TrashIcon" class="h-4 w-4" />
                             </button>
                         </td>
                     </tr>

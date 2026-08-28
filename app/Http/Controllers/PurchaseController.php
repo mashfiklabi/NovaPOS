@@ -9,6 +9,7 @@ use App\Http\Requests\BulkDestroyPurchaseRequest;
 use App\Http\Requests\BulkRestorePurchaseRequest;
 use App\Http\Requests\CancelPurchaseRequest;
 use App\Http\Requests\ReceivePurchaseRequest;
+use App\Http\Requests\StorePurchasePaymentRequest;
 use App\Http\Requests\StorePurchaseRequest;
 use App\Http\Requests\UpdatePurchaseRequest;
 use App\Models\Product;
@@ -164,6 +165,21 @@ class PurchaseController extends Controller
 
             return redirect()->route('purchases.show', $updated->id)
                 ->with('success', 'Purchase order updated successfully.');
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Record payment for an outstanding purchase order.
+     */
+    public function pay(StorePurchasePaymentRequest $request, Purchase $purchase): RedirectResponse
+    {
+        try {
+            $amount = (float) $request->validated()['amount'];
+            $this->purchaseService->recordPayment($purchase, $amount);
+
+            return redirect()->back()->with('success', 'Payment recorded successfully.');
         } catch (\InvalidArgumentException $e) {
             return redirect()->back()->withErrors(['error' => $e->getMessage()]);
         }
