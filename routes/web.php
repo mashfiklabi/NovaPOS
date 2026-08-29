@@ -5,12 +5,14 @@ declare(strict_types=1);
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\BrandController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\SaleController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\UnitController;
@@ -79,6 +81,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('purchases/{purchase}/cancel', [PurchaseController::class, 'cancel'])->name('purchases.cancel');
     Route::post('purchases/{purchase}/pay', [PurchaseController::class, 'pay'])->name('purchases.pay');
     Route::resource('purchases', PurchaseController::class);
+
+    // Customers Module
+    Route::get('customers/export', [CustomerController::class, 'export'])->name('customers.export');
+    Route::post('customers/bulk-delete', [CustomerController::class, 'bulkDestroy'])->name('customers.bulk-delete');
+    Route::post('customers/bulk-restore', [CustomerController::class, 'bulkRestore'])->name('customers.bulk-restore');
+    Route::post('customers/{id}/restore', [CustomerController::class, 'restore'])->name('customers.restore');
+    Route::resource('customers', CustomerController::class)->except(['create', 'edit', 'show']);
+
+    // Sales & POS Module
+    Route::get('sales/export', [SaleController::class, 'export'])->name('sales.export');
+    Route::post('sales/bulk-delete', [SaleController::class, 'bulkDestroy'])->name('sales.bulk-delete');
+    Route::post('sales/bulk-restore', [SaleController::class, 'bulkRestore'])->name('sales.bulk-restore');
+    Route::post('sales/{id}/restore', [SaleController::class, 'restore'])->name('sales.restore');
+    Route::post('sales/{sale}/cancel', [SaleController::class, 'cancel'])->name('sales.cancel');
+    Route::post('sales/{sale}/pay', [SaleController::class, 'pay'])->name('sales.pay');
+    Route::resource('sales', SaleController::class);
 
     // Roles & Permissions Module
     Route::resource('roles', RoleController::class)->except(['create', 'edit', 'show']);

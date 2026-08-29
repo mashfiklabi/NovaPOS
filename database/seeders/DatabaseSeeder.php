@@ -101,6 +101,26 @@ class DatabaseSeeder extends Seeder
             'purchases.cancel' => 'Ability to cancel purchase orders',
             'purchases.bulk_delete' => 'Ability to bulk delete purchases',
             'purchases.bulk_restore' => 'Ability to bulk restore purchases',
+
+            // Sprint 5 - Customers
+            'customers.view' => 'Ability to view customers',
+            'customers.create' => 'Ability to create customers',
+            'customers.update' => 'Ability to update customers',
+            'customers.delete' => 'Ability to delete customers',
+            'customers.restore' => 'Ability to restore soft deleted customers',
+            'customers.bulk_delete' => 'Ability to bulk delete customers',
+            'customers.bulk_restore' => 'Ability to bulk restore customers',
+
+            // Sprint 5 - Sales & POS
+            'sales.view' => 'Ability to view sales',
+            'sales.create' => 'Ability to create sales',
+            'sales.update' => 'Ability to update sales',
+            'sales.delete' => 'Ability to delete sales',
+            'sales.cancel' => 'Ability to cancel sales',
+            'sales.payment' => 'Ability to record sales payments',
+            'sales.restore' => 'Ability to restore soft deleted sales',
+            'sales.bulk_delete' => 'Ability to bulk delete sales',
+            'sales.bulk_restore' => 'Ability to bulk restore sales',
         ];
 
         foreach ($permissions as $name => $description) {
@@ -174,6 +194,24 @@ class DatabaseSeeder extends Seeder
             'purchases.cancel',
             'purchases.bulk_delete',
             'purchases.bulk_restore',
+
+            'customers.view',
+            'customers.create',
+            'customers.update',
+            'customers.delete',
+            'customers.restore',
+            'customers.bulk_delete',
+            'customers.bulk_restore',
+
+            'sales.view',
+            'sales.create',
+            'sales.update',
+            'sales.delete',
+            'sales.cancel',
+            'sales.payment',
+            'sales.restore',
+            'sales.bulk_delete',
+            'sales.bulk_restore',
         ]);
 
         $cashierRole = Role::findOrCreate('Cashier', 'web');
@@ -185,6 +223,11 @@ class DatabaseSeeder extends Seeder
             'products.view',
             'suppliers.view',
             'purchases.view',
+            'customers.view',
+            'customers.create',
+            'sales.view',
+            'sales.create',
+            'sales.payment',
         ]);
 
         // 3. Seed Default Super Admin User

@@ -46,6 +46,18 @@ return [
         'permission' => 'purchases.view',
     ],
     [
+        'title' => 'Customers',
+        'route' => 'customers.index',
+        'icon' => 'UsersIcon',
+        'permission' => 'customers.view',
+    ],
+    [
+        'title' => 'Sales',
+        'route' => 'sales.index',
+        'icon' => 'BanknotesIcon',
+        'permission' => 'sales.view',
+    ],
+    [
         'title' => 'Users',
         'route' => 'users.index',
         'icon' => 'UsersIcon',

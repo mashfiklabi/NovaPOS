@@ -6,24 +6,32 @@ namespace App\Providers;
 
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Purchase;
+use App\Models\Sale;
+use App\Models\SalePayment;
 use App\Models\Setting;
 use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
 use App\Observers\BrandObserver;
 use App\Observers\CategoryObserver;
+use App\Observers\CustomerObserver;
 use App\Observers\ProductObserver;
 use App\Observers\PurchaseObserver;
+use App\Observers\SaleObserver;
+use App\Observers\SalePaymentObserver;
 use App\Observers\SupplierObserver;
 use App\Observers\UnitObserver;
 use App\Observers\UserObserver;
 use App\Policies\BrandPolicy;
 use App\Policies\CategoryPolicy;
+use App\Policies\CustomerPolicy;
 use App\Policies\ProductPolicy;
 use App\Policies\PurchasePolicy;
 use App\Policies\RolePolicy;
+use App\Policies\SalePolicy;
 use App\Policies\SettingPolicy;
 use App\Policies\SupplierPolicy;
 use App\Policies\UnitPolicy;
@@ -58,6 +66,9 @@ class AppServiceProvider extends ServiceProvider
         Product::observe(ProductObserver::class);
         Supplier::observe(SupplierObserver::class);
         Purchase::observe(PurchaseObserver::class);
+        Customer::observe(CustomerObserver::class);
+        Sale::observe(SaleObserver::class);
+        SalePayment::observe(SalePaymentObserver::class);
 
         // Explicitly register RBAC & configuration Policies
         Gate::policy(User::class, UserPolicy::class);
@@ -73,6 +84,10 @@ class AppServiceProvider extends ServiceProvider
         // Register Sprint 4 Policies
         Gate::policy(Supplier::class, SupplierPolicy::class);
         Gate::policy(Purchase::class, PurchasePolicy::class);
+
+        // Register Sprint 5 Policies
+        Gate::policy(Customer::class, CustomerPolicy::class);
+        Gate::policy(Sale::class, SalePolicy::class);
 
         // Define Spatie permission wildcard bypass for Super Admin role
         Gate::before(function (User $user, string $ability) {
