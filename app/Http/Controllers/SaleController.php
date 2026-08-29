@@ -103,10 +103,14 @@ class SaleController extends Controller
      */
     public function store(StoreSaleRequest $request): RedirectResponse
     {
-        $sale = $this->saleService->create($request->validated());
+        try {
+            $sale = $this->saleService->create($request->validated());
 
-        return redirect()->route('sales.show', $sale->id)
-            ->with('success', 'Sale transaction completed successfully.');
+            return redirect()->route('sales.show', $sale->id)
+                ->with('success', 'Sale transaction completed successfully.');
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+        }
     }
 
     /**

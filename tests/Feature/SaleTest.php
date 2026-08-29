@@ -286,6 +286,46 @@ class SaleTest extends TestCase
         ]);
     }
 
+    public function test_initial_payment_cannot_exceed_sale_grand_total(): void
+    {
+        $payload = [
+            'customer_id' => $this->customer->id,
+            'sale_date' => now()->format('Y-m-d'),
+            'status' => 'completed',
+            'items' => [
+                [
+                    'product_id' => $this->integerProduct->id, // 50.00 * 2 = 100.00
+                    'quantity' => 2,
+                ],
+            ],
+            'paid_amount' => 150.00, // Exceeds grand_total of 100.00
+        ];
+
+        $response = $this->actingAs($this->adminUser)->post(route('sales.store'), $payload);
+
+        $response->assertSessionHasErrors(['error']);
+    }
+
+    public function test_payment_cannot_be_recorded_for_cancelled_sale(): void
+    {
+        $sale = Sale::factory()->create([
+            'customer_id' => $this->customer->id,
+            'grand_total' => 100.00,
+            'paid_amount' => 0.00,
+            'due_amount' => 100.00,
+            'status' => SaleStatus::CANCELLED,
+            'payment_status' => PaymentStatus::UNPAID,
+        ]);
+
+        $response = $this->actingAs($this->adminUser)->post(route('sales.pay', $sale), [
+            'amount' => 50.00,
+            'payment_method' => 'cash',
+        ]);
+
+        $response->assertSessionHasErrors(['error']);
+        $this->assertEquals(100.00, $sale->fresh()->due_amount);
+    }
+
     public function test_payment_cannot_exceed_outstanding_due_amount(): void
     {
         $sale = Sale::factory()->create([

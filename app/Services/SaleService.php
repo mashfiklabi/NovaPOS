@@ -144,6 +144,10 @@ class SaleService
             // Lock sale row for concurrency safety
             $lockedSale = Sale::where('id', $sale->id)->lockForUpdate()->firstOrFail();
 
+            if ($lockedSale->status === SaleStatus::CANCELLED) {
+                throw new InvalidArgumentException('Cannot record payment for a cancelled sale.');
+            }
+
             $amount = (float) ($paymentData['amount'] ?? 0);
             if ($amount <= 0) {
                 throw new InvalidArgumentException('Payment amount must be greater than zero.');
@@ -331,6 +335,10 @@ class SaleService
         if ($grandTotal < 0) {
             $grandTotal = 0.0;
         }
+
+            if ($paid > $grandTotal) {
+                throw new InvalidArgumentException("Initial paid amount (\${$paid}) cannot exceed sale grand total (\${$grandTotal}).");
+            }
 
         $dueAmount = round($grandTotal - $paid, 2);
         if ($dueAmount < 0) {
