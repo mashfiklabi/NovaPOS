@@ -6,7 +6,6 @@ namespace App\Http\Requests;
 
 use App\Models\Product;
 use App\Models\Sale;
-use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreSaleRequest extends FormRequest
@@ -17,7 +16,7 @@ class StoreSaleRequest extends FormRequest
     }
 
     /**
-     * @return array<string, ValidationRule|array<mixed>|string>
+     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
@@ -35,7 +34,7 @@ class StoreSaleRequest extends FormRequest
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'items.*.quantity' => ['required', 'numeric', 'gt:0'],
-            'items.*.unit_price' => ['required', 'numeric', 'min:0'],
+            'items.*.unit_price' => ['nullable', 'numeric', 'min:0'],
             'items.*.discount_amount' => ['nullable', 'numeric', 'min:0'],
             'items.*.tax_amount' => ['nullable', 'numeric', 'min:0'],
         ];
@@ -45,16 +44,19 @@ class StoreSaleRequest extends FormRequest
     {
         $validator->after(function ($validator) {
             $items = $this->input('items', []);
-            if (! is_array($items)) {
+            if (! is_array($items) || empty($items)) {
                 return;
             }
+
+            $productIds = array_filter(array_column($items, 'product_id'));
+            $products = Product::whereIn('id', $productIds)->get()->keyBy('id');
 
             foreach ($items as $index => $item) {
                 if (empty($item['product_id']) || empty($item['quantity'])) {
                     continue;
                 }
 
-                $product = Product::find($item['product_id']);
+                $product = $products->get($item['product_id']);
                 if ($product && ! $product->allow_decimal) {
                     $qty = (float) $item['quantity'];
                     if (floor($qty) != $qty || $qty < 1) {

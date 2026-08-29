@@ -24,6 +24,7 @@ class SaleObserver
             $latest = Sale::withTrashed()
                 ->where('invoice_number', 'like', "{$prefixWithMonth}%")
                 ->orderBy('id', 'desc')
+                ->lockForUpdate()
                 ->first();
 
             if ($latest) {

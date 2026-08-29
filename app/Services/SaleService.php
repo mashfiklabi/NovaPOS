@@ -23,7 +23,12 @@ class SaleService
      */
     public function create(array $data): Sale
     {
-        return DB::transaction(function () use ($data) {
+        $userId = Auth::id();
+        if (! $userId) {
+            throw new InvalidArgumentException('An authenticated user is required for sales operations.');
+        }
+
+        return DB::transaction(function () use ($data, $userId) {
             $itemsData = $data['items'] ?? [];
             unset($data['items']);
 
@@ -31,9 +36,9 @@ class SaleService
             unset($data['payment_method']);
 
             $data['status'] = $data['status'] ?? SaleStatus::COMPLETED->value;
-            $data['user_id'] = $data['user_id'] ?? Auth::id() ?? 1;
+            $data['user_id'] = $userId;
 
-            // Compute financial totals
+            // Compute financial totals with authoritative server-side product prices
             $totals = $this->calculateTotals($itemsData, $data);
             $data['subtotal'] = $totals['subtotal'];
             $data['discount_amount'] = $totals['discount_amount'];
@@ -53,7 +58,7 @@ class SaleService
             if ($sale->paid_amount > 0) {
                 $sale->payments()->create([
                     'uuid' => (string) Str::uuid(),
-                    'user_id' => Auth::id() ?? $sale->user_id,
+                    'user_id' => $userId,
                     'payment_method' => $paymentMethod,
                     'amount' => $sale->paid_amount,
                     'paid_at' => now(),
@@ -72,20 +77,34 @@ class SaleService
     }
 
     /**
-     * Update an existing sale.
+     * Update an existing sale while preserving payment integrity.
      *
      * @param  array<string, mixed>  $data
      */
     public function update(Sale $sale, array $data): Sale
     {
+        $userId = Auth::id();
+        if (! $userId) {
+            throw new InvalidArgumentException('An authenticated user is required for sales operations.');
+        }
+
         return DB::transaction(function () use ($sale, $data) {
-            if ($sale->status === SaleStatus::CANCELLED) {
+            $lockedSale = Sale::where('id', $sale->id)->lockForUpdate()->firstOrFail();
+
+            if ($lockedSale->status === SaleStatus::CANCELLED) {
                 throw new InvalidArgumentException('Cannot edit a cancelled sale.');
             }
 
             $itemsData = $data['items'] ?? [];
             unset($data['items']);
             unset($data['payment_method']);
+
+            // Preserve actual payment integrity from existing SalePayment records
+            $existingPaidSum = (float) $lockedSale->payments()->sum('amount');
+            if ($existingPaidSum === 0.0 && (float) $lockedSale->paid_amount > 0) {
+                $existingPaidSum = (float) $lockedSale->paid_amount;
+            }
+            $data['paid_amount'] = $existingPaidSum;
 
             $totals = $this->calculateTotals($itemsData, $data);
             $data['subtotal'] = $totals['subtotal'];
@@ -97,53 +116,70 @@ class SaleService
             $data['due_amount'] = $totals['due_amount'];
             $data['payment_status'] = $totals['payment_status'];
 
-            $sale->update($data);
+            $lockedSale->update($data);
 
             // Re-create items
-            $sale->items()->delete();
+            $lockedSale->items()->delete();
             foreach ($totals['items'] as $itemData) {
-                $sale->items()->create($itemData);
+                $lockedSale->items()->create($itemData);
             }
 
-            return $sale->load('items.product', 'customer', 'payments');
+            return $lockedSale->load('items.product', 'customer', 'payments');
         });
     }
 
     /**
-     * Record a payment for an outstanding sale.
+     * Record a payment with row locking and balance verification.
      *
      * @param  array<string, mixed>  $paymentData
      */
     public function recordPayment(Sale $sale, array $paymentData): Sale
     {
-        return DB::transaction(function () use ($sale, $paymentData) {
-            $amount = (float) ($paymentData['amount'] ?? 0);
+        $userId = Auth::id();
+        if (! $userId) {
+            throw new InvalidArgumentException('An authenticated user is required for sales operations.');
+        }
 
+        return DB::transaction(function () use ($sale, $paymentData, $userId) {
+            // Lock sale row for concurrency safety
+            $lockedSale = Sale::where('id', $sale->id)->lockForUpdate()->firstOrFail();
+
+            $amount = (float) ($paymentData['amount'] ?? 0);
             if ($amount <= 0) {
                 throw new InvalidArgumentException('Payment amount must be greater than zero.');
             }
 
-            if ($amount > (float) $sale->due_amount) {
-                throw new InvalidArgumentException('Payment amount cannot exceed the balance due.');
+            // Recalculate true outstanding amount inside locked transaction
+            $currentPaidSum = (float) $lockedSale->payments()->sum('amount');
+            if ($currentPaidSum === 0.0 && (float) $lockedSale->paid_amount > 0) {
+                $currentPaidSum = (float) $lockedSale->paid_amount;
+            }
+            $currentDue = round((float) $lockedSale->grand_total - $currentPaidSum, 2);
+            if ($currentDue < 0) {
+                $currentDue = 0.0;
             }
 
-            $newPaid = round((float) $sale->paid_amount + $amount, 2);
-            $newDue = round((float) $sale->grand_total - $newPaid, 2);
+            if ($amount > $currentDue) {
+                throw new InvalidArgumentException("Payment amount (\${$amount}) exceeds current outstanding due amount (\${$currentDue}).");
+            }
+
+            $newPaid = round($currentPaidSum + $amount, 2);
+            $newDue = round((float) $lockedSale->grand_total - $newPaid, 2);
             if ($newDue < 0) {
                 $newDue = 0.0;
             }
 
             $newPaymentStatus = $newDue <= 0 ? PaymentStatus::PAID : PaymentStatus::PARTIAL;
 
-            $sale->update([
+            $lockedSale->update([
                 'paid_amount' => $newPaid,
                 'due_amount' => $newDue,
                 'payment_status' => $newPaymentStatus,
             ]);
 
-            $sale->payments()->create([
+            $lockedSale->payments()->create([
                 'uuid' => (string) Str::uuid(),
-                'user_id' => Auth::id() ?? $sale->user_id,
+                'user_id' => $userId,
                 'payment_method' => $paymentData['payment_method'] ?? SalePaymentMethod::CASH->value,
                 'amount' => $amount,
                 'reference_number' => $paymentData['reference_number'] ?? null,
@@ -153,11 +189,11 @@ class SaleService
 
             NotificationService::notifyAdminsAndManagers(
                 'Sale Payment Recorded',
-                "Payment of \${$amount} recorded for Invoice #{$sale->invoice_number}. Remaining due: \${$newDue}",
-                "/sales/{$sale->id}"
+                "Payment of \${$amount} recorded for Invoice #{$lockedSale->invoice_number}. Remaining due: \${$newDue}",
+                "/sales/{$lockedSale->id}"
             );
 
-            return $sale->fresh(['payments', 'customer', 'items']);
+            return $lockedSale->fresh(['payments', 'customer', 'items']);
         });
     }
 
@@ -235,6 +271,7 @@ class SaleService
 
     /**
      * Helper to compute calculation details and format item data.
+     * Uses authoritative product prices from the database.
      *
      * @param  array<int, array<string, mixed>>  $rawItems
      * @param  array<string, mixed>  $headerData
@@ -242,17 +279,28 @@ class SaleService
      */
     protected function calculateTotals(array $rawItems, array $headerData): array
     {
+        $productIds = array_column($rawItems, 'product_id');
+        $products = Product::whereIn('id', $productIds)->get()->keyBy('id');
+
         $processedItems = [];
         $subtotal = 0.0;
 
         foreach ($rawItems as $item) {
+            $productId = $item['product_id'];
+            $product = $products->get($productId);
+
+            if (! $product) {
+                throw new InvalidArgumentException("Product ID {$productId} not found.");
+            }
+
             $qty = (float) ($item['quantity'] ?? 0);
-            $unitPrice = (float) ($item['unit_price'] ?? $item['price'] ?? 0);
+            // Authoritative selling price from DB product record
+            $unitPrice = (float) $product->selling_price;
+
             $discount = (float) ($item['discount_amount'] ?? $item['discount'] ?? 0);
             $tax = (float) ($item['tax_amount'] ?? $item['tax'] ?? 0);
 
-            $product = Product::find($item['product_id']);
-            $unitId = $item['unit_id'] ?? ($product ? $product->unit_id : null);
+            $unitId = $item['unit_id'] ?? $product->unit_id;
 
             $lineSubtotal = round($qty * $unitPrice, 2);
             $lineTotal = round($lineSubtotal - $discount + $tax, 2);
@@ -263,7 +311,7 @@ class SaleService
             $subtotal += $lineTotal;
 
             $processedItems[] = [
-                'product_id' => $item['product_id'],
+                'product_id' => $productId,
                 'unit_id' => $unitId,
                 'quantity' => $qty,
                 'unit_price' => $unitPrice,

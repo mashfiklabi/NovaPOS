@@ -110,6 +110,83 @@ class SaleTest extends TestCase
         ]);
     }
 
+    public function test_client_cannot_manipulate_product_selling_price(): void
+    {
+        // $this->integerProduct DB selling_price = 50.00
+        // Client attempts to pass manipulated unit_price = 0.01
+        $payload = [
+            'customer_id' => $this->customer->id,
+            'sale_date' => now()->format('Y-m-d'),
+            'status' => 'completed',
+            'items' => [
+                [
+                    'product_id' => $this->integerProduct->id,
+                    'quantity' => 2,
+                    'unit_price' => 0.01, // Manipulated price
+                ],
+            ],
+            'paid_amount' => 100.00,
+        ];
+
+        $response = $this->actingAs($this->adminUser)->post(route('sales.store'), $payload);
+
+        $response->assertRedirect();
+        // Server MUST use authoritative DB selling_price (50.00 * 2 = 100.00)
+        $this->assertDatabaseHas('sale_items', [
+            'product_id' => $this->integerProduct->id,
+            'unit_price' => 50.00,
+            'total' => 100.00,
+        ]);
+
+        $this->assertDatabaseHas('sales', [
+            'grand_total' => 100.00,
+        ]);
+    }
+
+    public function test_sale_update_preserves_payment_integrity_from_actual_sale_payments(): void
+    {
+        $sale = Sale::factory()->create([
+            'customer_id' => $this->customer->id,
+            'grand_total' => 100.00,
+            'paid_amount' => 40.00,
+            'due_amount' => 60.00,
+            'payment_status' => PaymentStatus::PARTIAL,
+        ]);
+
+        $sale->payments()->create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'user_id' => $this->adminUser->id,
+            'payment_method' => \App\Enums\SalePaymentMethod::CASH,
+            'amount' => 40.00,
+            'paid_at' => now(),
+        ]);
+
+        // Attempting to pass manipulated paid_amount = 0 in update payload
+        $updatePayload = [
+            'customer_id' => $this->customer->id,
+            'sale_date' => now()->format('Y-m-d'),
+            'items' => [
+                [
+                    'product_id' => $this->integerProduct->id,
+                    'quantity' => 2,
+                    'unit_price' => 50.00,
+                ],
+            ],
+            'paid_amount' => 0.00, // Manipulated payload
+        ];
+
+        $response = $this->actingAs($this->adminUser)->put(route('sales.update', $sale), $updatePayload);
+
+        $response->assertRedirect();
+        // Server MUST keep paid_amount = 40.00 derived from actual SalePayment records sum
+        $this->assertDatabaseHas('sales', [
+            'id' => $sale->id,
+            'paid_amount' => 40.00,
+            'due_amount' => 60.00,
+            'payment_status' => PaymentStatus::PARTIAL->value,
+        ]);
+    }
+
     public function test_server_calculates_totals_discounts_taxes_and_payment_status_correctly(): void
     {
         $payload = [
@@ -120,7 +197,6 @@ class SaleTest extends TestCase
                 [
                     'product_id' => $this->integerProduct->id,
                     'quantity' => 3,
-                    'unit_price' => 50.00,
                     'discount_amount' => 10.00,
                     'tax_amount' => 5.00,
                 ], // Line total: (3*50) - 10 + 5 = 145.00
@@ -151,7 +227,7 @@ class SaleTest extends TestCase
             'sale_date' => now()->format('Y-m-d'),
             'status' => 'completed',
             'items' => [
-                ['product_id' => $this->integerProduct->id, 'quantity' => 1, 'unit_price' => 50.00],
+                ['product_id' => $this->integerProduct->id, 'quantity' => 1],
             ],
             'paid_amount' => 0.00,
         ];
@@ -176,7 +252,6 @@ class SaleTest extends TestCase
                 [
                     'product_id' => $this->integerProduct->id,
                     'quantity' => 1.5, // Invalid decimal quantity
-                    'unit_price' => 50.00,
                 ],
             ],
         ];
@@ -196,7 +271,6 @@ class SaleTest extends TestCase
                 [
                     'product_id' => $this->decimalProduct->id,
                     'quantity' => 2.250, // Valid decimal quantity
-                    'unit_price' => 20.00,
                 ],
             ],
             'paid_amount' => 45.00,
@@ -261,6 +335,22 @@ class SaleTest extends TestCase
         $this->assertNotEmpty($s1->invoice_number);
         $this->assertNotEmpty($s2->invoice_number);
         $this->assertNotEquals($s1->invoice_number, $s2->invoice_number);
+    }
+
+    public function test_unauthenticated_user_cannot_create_sales(): void
+    {
+        $payload = [
+            'customer_id' => $this->customer->id,
+            'sale_date' => now()->format('Y-m-d'),
+            'status' => 'completed',
+            'items' => [
+                ['product_id' => $this->integerProduct->id, 'quantity' => 1],
+            ],
+        ];
+
+        $response = $this->post(route('sales.store'), $payload);
+
+        $response->assertRedirect('/login');
     }
 
     public function test_unauthorized_user_cannot_access_or_create_sales(): void
