@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { Head, Link, router, usePage, useForm } from '@inertiajs/vue3';
 import { PageProps, Sale } from '@/types';
+import { formatCurrency, formatDate } from '@/Composables/useFormatters';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AppCard from '@/Components/AppCard.vue';
 import PageHeader from '@/Components/PageHeader.vue';
@@ -22,10 +23,6 @@ const isSuperAdmin = computed(() => roles.value.includes('Super Admin'));
 const hasPermission = (permission: string) => {
     if (isSuperAdmin.value) return true;
     return permissions.value.includes(permission);
-};
-
-const formatCurrency = (amount: string | number) => {
-    return Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
 const isPaymentModalOpen = ref(false);
@@ -135,13 +132,13 @@ const deleteSale = () => {
                         <div>
                             <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1">Dates & Creator</span>
                             <div class="text-gray-700 dark:text-gray-300">
-                                <strong>Sale Date:</strong> {{ sale.sale_date }}
+                                <strong>Sale Date:</strong> {{ formatDate(sale.sale_date) }}
                             </div>
                             <div v-if="sale.reference_number" class="text-gray-700 dark:text-gray-300">
                                 <strong>Ref #:</strong> {{ sale.reference_number }}
                             </div>
                             <div class="text-gray-500 text-xs mt-2">
-                                Billed by {{ sale.user ? sale.user.name : 'Staff' }} on {{ sale.created_at }}
+                                Billed by {{ sale.user ? sale.user.name : 'Staff' }} on {{ formatDate(sale.created_at) }}
                             </div>
                         </div>
                     </div>
@@ -171,16 +168,16 @@ const deleteSale = () => {
                                         {{ item.quantity }}
                                     </td>
                                     <td class="py-3 px-3 text-right text-gray-600 dark:text-gray-400">
-                                        ${{ formatCurrency(item.unit_price) }}
+                                        {{ formatCurrency(item.unit_price) }}
                                     </td>
                                     <td class="py-3 px-3 text-right text-gray-500">
-                                        ${{ formatCurrency(item.discount_amount) }}
+                                        {{ formatCurrency(item.discount_amount) }}
                                     </td>
                                     <td class="py-3 px-3 text-right text-gray-500">
-                                        ${{ formatCurrency(item.tax_amount) }}
+                                        {{ formatCurrency(item.tax_amount) }}
                                     </td>
                                     <td class="py-3 px-3 text-right font-bold text-gray-900 dark:text-gray-100">
-                                        ${{ formatCurrency(item.total) }}
+                                        {{ formatCurrency(item.total) }}
                                     </td>
                                 </tr>
                             </tbody>
@@ -207,7 +204,7 @@ const deleteSale = () => {
                             <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
                                 <tr v-for="pay in sale.payments" :key="pay.id">
                                     <td class="py-3 px-3 text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                                        {{ pay.paid_at }}
+                                        {{ formatDate(pay.paid_at) }}
                                     </td>
                                     <td class="py-3 px-3 capitalize font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
                                         {{ pay.payment_method }}
@@ -219,7 +216,7 @@ const deleteSale = () => {
                                         {{ pay.user ? pay.user.name : 'System' }}
                                     </td>
                                     <td class="py-3 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
-                                        ${{ formatCurrency(pay.amount) }}
+                                        {{ formatCurrency(pay.amount) }}
                                     </td>
                                 </tr>
                             </tbody>
@@ -270,37 +267,37 @@ const deleteSale = () => {
                     <div class="space-y-3 text-sm">
                         <div class="flex justify-between text-gray-600 dark:text-gray-400">
                             <span>Subtotal:</span>
-                            <span class="font-semibold text-gray-900 dark:text-gray-100">${{ formatCurrency(sale.subtotal) }}</span>
+                            <span class="font-semibold text-gray-900 dark:text-gray-100">{{ formatCurrency(sale.subtotal) }}</span>
                         </div>
 
                         <div class="flex justify-between text-gray-600 dark:text-gray-400">
                             <span>Discount:</span>
-                            <span class="font-semibold text-gray-900 dark:text-gray-100">-${{ formatCurrency(sale.discount_amount) }}</span>
+                            <span class="font-semibold text-gray-900 dark:text-gray-100">-{{ formatCurrency(sale.discount_amount) }}</span>
                         </div>
 
                         <div class="flex justify-between text-gray-600 dark:text-gray-400">
                             <span>Tax:</span>
-                            <span class="font-semibold text-gray-900 dark:text-gray-100">+${{ formatCurrency(sale.tax_amount) }}</span>
+                            <span class="font-semibold text-gray-900 dark:text-gray-100">+{{ formatCurrency(sale.tax_amount) }}</span>
                         </div>
 
                         <div class="flex justify-between text-gray-600 dark:text-gray-400">
                             <span>Shipping Cost:</span>
-                            <span class="font-semibold text-gray-900 dark:text-gray-100">+${{ formatCurrency(sale.shipping_cost) }}</span>
+                            <span class="font-semibold text-gray-900 dark:text-gray-100">+{{ formatCurrency(sale.shipping_cost) }}</span>
                         </div>
 
                         <div class="border-t border-gray-200 dark:border-gray-800 pt-3 flex justify-between font-bold text-base text-gray-900 dark:text-gray-100">
                             <span>Grand Total:</span>
-                            <span class="text-indigo-600 dark:text-indigo-400">${{ formatCurrency(sale.grand_total) }}</span>
+                            <span class="text-indigo-600 dark:text-indigo-400">{{ formatCurrency(sale.grand_total) }}</span>
                         </div>
 
                         <div class="flex justify-between text-gray-600 dark:text-gray-400">
                             <span>Paid Amount:</span>
-                            <span class="font-semibold text-gray-900 dark:text-gray-100">${{ formatCurrency(sale.paid_amount) }}</span>
+                            <span class="font-semibold text-gray-900 dark:text-gray-100">{{ formatCurrency(sale.paid_amount) }}</span>
                         </div>
 
                         <div class="flex justify-between font-bold text-red-600 dark:text-red-400 border-t border-gray-100 dark:border-gray-800 pt-2">
                             <span>Balance Due:</span>
-                            <span>${{ formatCurrency(sale.due_amount) }}</span>
+                            <span>{{ formatCurrency(sale.due_amount) }}</span>
                         </div>
                     </div>
                 </AppCard>
@@ -319,10 +316,10 @@ const deleteSale = () => {
                         Recording payment for Invoice <strong>#{{ sale.invoice_number }}</strong>
                     </p>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                        Total: <strong>${{ formatCurrency(sale.grand_total) }}</strong> | Paid: <strong>${{ formatCurrency(sale.paid_amount) }}</strong> | Outstanding Due: <strong class="text-red-600 dark:text-red-400">${{ formatCurrency(sale.due_amount) }}</strong>
+                        Total: <strong>{{ formatCurrency(sale.grand_total) }}</strong> | Paid: <strong>{{ formatCurrency(sale.paid_amount) }}</strong> | Balance Due: <strong class="text-red-600 dark:text-red-400">{{ formatCurrency(sale.due_amount) }}</strong>
                     </p>
                     <AppInput
-                        label="Payment Amount ($)"
+                        label="Payment Amount"
                         type="number"
                         step="0.01"
                         min="0.01"

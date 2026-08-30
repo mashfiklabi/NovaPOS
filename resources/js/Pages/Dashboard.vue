@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted, ref, computed } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { PageProps } from '@/types';
+import { formatCurrency, formatDate } from '@/Composables/useFormatters';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import PageHeader from '@/Components/PageHeader.vue';
 import AppCard from '@/Components/AppCard.vue';
@@ -62,16 +63,6 @@ const props = defineProps<{
     };
 }>();
 
-const formatCurrency = (amount: number) => {
-    return Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-};
-
-const formatTime = (timeString: string) => {
-    return new Date(timeString).toLocaleString('en-US', {
-        dateStyle: 'short',
-        timeStyle: 'short',
-    });
-};
 
 // Chart.js Setup
 const chartCanvas = ref<HTMLCanvasElement | null>(null);
@@ -88,7 +79,7 @@ onMounted(() => {
                     labels: props.chart_data.labels,
                     datasets: [
                         {
-                            label: 'Daily Purchases ($)',
+                            label: 'Daily Purchases',
                             data: props.chart_data.purchases,
                             backgroundColor: 'rgba(79, 70, 229, 0.85)',
                             hoverBackgroundColor: '#4f46e5',
@@ -106,7 +97,7 @@ onMounted(() => {
                         },
                         tooltip: {
                             callbacks: {
-                                label: (context) => `$${formatCurrency(Number(context.raw))}`
+                                label: (context) => formatCurrency(Number(context.raw))
                             }
                         }
                     },
@@ -117,7 +108,7 @@ onMounted(() => {
                             },
                             ticks: {
                                 color: isDark ? '#9ca3af' : '#6b7280',
-                                callback: (val) => `$${val}`
+                                callback: (val) => formatCurrency(Number(val))
                             }
                         },
                         x: {
@@ -146,7 +137,19 @@ onUnmounted(() => {
     <AppLayout>
         <Head title="NovaPOS Dashboard" />
 
-        <PageHeader title="Dashboard" subtitle="Overview of store operations, inventory metrics, and purchasing trends." :breadcrumbs="[{ name: 'Dashboard' }]" />
+        <PageHeader title="Dashboard" subtitle="Overview of store operations, inventory metrics, and purchasing trends." :breadcrumbs="[{ name: 'Dashboard' }]">
+            <template #actions>
+                <div class="flex items-center space-x-2">
+                    <Link
+                        v-if="permissions.can_view_purchases"
+                        href="/sales/create"
+                        class="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-sm transition-colors"
+                    >
+                        + New Sale / POS
+                    </Link>
+                </div>
+            </template>
+        </PageHeader>
 
         <!-- Nova 5 Metric Cards Grid -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
@@ -159,7 +162,7 @@ onUnmounted(() => {
                     </div>
                 </div>
                 <div class="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
-                    ${{ formatCurrency(metrics.today_purchases_total) }}
+                    {{ formatCurrency(metrics.today_purchases_total) }}
                 </div>
                 <div class="mt-2 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
                     <span>{{ metrics.today_purchases_count }} orders placed today</span>
@@ -176,7 +179,7 @@ onUnmounted(() => {
                     </div>
                 </div>
                 <div class="text-2xl font-black text-red-600 dark:text-red-400 tracking-tight">
-                    ${{ formatCurrency(metrics.outstanding_purchase_due) }}
+                    {{ formatCurrency(metrics.outstanding_purchase_due) }}
                 </div>
                 <div class="mt-2 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
                     <span>Unpaid supplier balances</span>
@@ -353,7 +356,7 @@ onUnmounted(() => {
                                         {{ po.supplier }}
                                     </td>
                                     <td class="py-2.5 px-3 text-right text-gray-900 dark:text-gray-100 font-bold">
-                                        ${{ formatCurrency(po.grand_total) }}
+                                        {{ formatCurrency(po.grand_total) }}
                                     </td>
                                     <td class="py-2.5 px-3 text-center">
                                         <span
@@ -389,7 +392,7 @@ onUnmounted(() => {
                 <AppTable :headers="['Time', 'User', 'Operation']">
                     <tr v-for="act in recent_activities" :key="act.id" class="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
                         <td class="px-6 py-3 text-xs text-gray-500 whitespace-nowrap">
-                            {{ formatTime(act.timestamp) }}
+                            {{ formatDate(act.timestamp) }}
                         </td>
                         <td class="px-6 py-3 text-xs font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
                             {{ act.user }}

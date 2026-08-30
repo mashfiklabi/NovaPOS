@@ -62,6 +62,25 @@ class SaleTest extends TestCase
         $response->assertStatus(200);
     }
 
+    public function test_authorized_user_can_access_sale_edit_page(): void
+    {
+        $sale = Sale::factory()->create(['customer_id' => $this->customer->id]);
+
+        $response = $this->actingAs($this->adminUser)->get(route('sales.edit', $sale));
+
+        $response->assertStatus(200);
+    }
+
+    public function test_unauthorized_user_cannot_access_sale_edit_page(): void
+    {
+        $sale = Sale::factory()->create(['customer_id' => $this->customer->id]);
+        $unauthorizedUser = User::factory()->create(['status' => 'active']);
+
+        $response = $this->actingAs($unauthorizedUser)->get(route('sales.edit', $sale));
+
+        $response->assertStatus(403);
+    }
+
     public function test_authorized_user_can_access_pos_create_page(): void
     {
         $response = $this->actingAs($this->adminUser)->get(route('sales.create'));

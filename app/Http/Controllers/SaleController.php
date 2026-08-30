@@ -102,6 +102,33 @@ class SaleController extends Controller
     /**
      * Store a newly created sale transaction.
      */
+    /**
+     * Show the form for editing the specified sale transaction.
+     */
+    public function edit(Sale $sale): Response
+    {
+        $this->authorize('update', $sale);
+
+        $sale->load(['customer', 'items.product']);
+
+        $customers = Customer::where('status', 'active')
+            ->select('id', 'name', 'phone')
+            ->orderBy('name')
+            ->get();
+
+        $products = Product::where('status', 'active')
+            ->select('id', 'name', 'sku', 'barcode', 'selling_price', 'current_stock', 'allow_decimal', 'tax_type', 'tax_rate')
+            ->with('unit:id,name,short_name')
+            ->orderBy('name')
+            ->get();
+
+        return Inertia::render('Sales/Edit', [
+            'sale' => $sale,
+            'customers' => $customers,
+            'products' => $products,
+        ]);
+    }
+
     public function store(StoreSaleRequest $request): RedirectResponse
     {
         try {

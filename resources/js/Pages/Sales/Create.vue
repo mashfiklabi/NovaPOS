@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick } from 'vue';
-import { Head, useForm, Link } from '@inertiajs/vue3';
-import { PageProps, POSProduct, Customer } from '@/types';
+import { Head, useForm, Link, router, usePage } from '@inertiajs/vue3';
+import { PageProps, POSProduct } from '@/types';
+import { formatCurrency } from '@/Composables/useFormatters';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AppCard from '@/Components/AppCard.vue';
 import PageHeader from '@/Components/PageHeader.vue';
 import AppInput from '@/Components/AppInput.vue';
 import AppButton from '@/Components/AppButton.vue';
-import AppSelect from '@/Components/AppSelect.vue';
+import AppModal from '@/Components/AppModal.vue';
 import Heroicon from '@/Components/Heroicon.vue';
 
 interface CartItem {
@@ -22,18 +23,68 @@ const props = defineProps<{
     products: POSProduct[];
 }>();
 
+const page = usePage<PageProps>();
+const shopTaxRate = computed(() => Number(page.props.settings?.tax_rate || 0));
+
+// Local Reactive Customers List
+const customerList = ref([...props.customers]);
+watch(() => props.customers, (newVal) => {
+    customerList.value = [...newVal];
+}, { deep: true });
+
 // Search & Barcode state
 const searchQuery = ref('');
 const barcodeQuery = ref('');
 const barcodeInputRef = ref<HTMLInputElement | null>(null);
 
-// Customer selection
+// Customer selection & Modal State
 const selectedCustomerId = ref<number | null>(null);
+const isCustomerModalOpen = ref(false);
+
+const customerForm = useForm({
+    name: '',
+    phone: '',
+    email: '',
+    address: '',
+    status: 'active',
+});
+
+const submitNewCustomer = () => {
+    customerForm.post('/customers', {
+        preserveScroll: true,
+        onSuccess: () => {
+            isCustomerModalOpen.value = false;
+            customerForm.reset();
+            // Refresh customers list from server
+            router.reload({
+                only: ['customers'],
+                onSuccess: (page) => {
+                    const latestCustomers = (page.props as any).customers || [];
+                    customerList.value = latestCustomers;
+                    // Auto-select the newly created customer (last item or match name)
+                    const newlyCreated = latestCustomers[latestCustomers.length - 1];
+                    if (newlyCreated) {
+                        selectedCustomerId.value = newlyCreated.id;
+                    }
+                }
+            });
+        },
+        onError: (err) => {
+            if (err.error) alert(err.error);
+        }
+    });
+};
 
 // Cart State
 const cart = ref<CartItem[]>([]);
-const headerDiscount = ref<number>(0);
-const headerTax = ref<number>(0);
+
+// Discount State
+const discountType = ref<'percentage' | 'fixed'>('percentage');
+const discountValue = ref<number>(0);
+
+// Tax State
+const taxRatePercent = ref<number>(shopTaxRate.value);
+
 const shippingCost = ref<number>(0);
 const paidAmount = ref<number>(0);
 const paymentMethod = ref<string>('cash');
@@ -128,8 +179,7 @@ const clearCart = () => {
     if (cart.value.length === 0) return;
     if (confirm('Are you sure you want to clear the cashier cart?')) {
         cart.value = [];
-        headerDiscount.value = 0;
-        headerTax.value = 0;
+        discountValue.value = 0;
         shippingCost.value = 0;
         paidAmount.value = 0;
     }
@@ -145,8 +195,27 @@ const subtotal = computed(() => {
     }, 0);
 });
 
+// Calculated Header Discount Amount
+const calculatedDiscountAmount = computed(() => {
+    if (discountValue.value <= 0) return 0;
+
+    if (discountType.value === 'percentage') {
+        const pct = Math.min(100, Math.max(0, discountValue.value));
+        return Math.round((subtotal.value * (pct / 100)) * 100) / 100;
+    } else {
+        return Math.min(subtotal.value, Math.max(0, discountValue.value));
+    }
+});
+
+// Calculated Tax Amount
+const calculatedTaxAmount = computed(() => {
+    if (taxRatePercent.value <= 0) return 0;
+    const taxableBase = Math.max(0, subtotal.value - calculatedDiscountAmount.value);
+    return Math.round((taxableBase * (taxRatePercent.value / 100)) * 100) / 100;
+});
+
 const grandTotal = computed(() => {
-    const total = subtotal.value - (headerDiscount.value || 0) + (headerTax.value || 0) + (shippingCost.value || 0);
+    const total = subtotal.value - calculatedDiscountAmount.value + calculatedTaxAmount.value + (shippingCost.value || 0);
     return Math.max(0, Math.round(total * 100) / 100);
 });
 
@@ -187,13 +256,13 @@ const submitSale = () => {
     }
 
     if (paidAmount.value > grandTotal.value) {
-        alert(`Paid amount ($${paidAmount.value}) cannot exceed grand total ($${grandTotal.value}).`);
+        alert(`Paid amount (${formatCurrency(paidAmount.value)}) cannot exceed grand total (${formatCurrency(grandTotal.value)}).`);
         return;
     }
 
     form.customer_id = selectedCustomerId.value;
-    form.discount_amount = headerDiscount.value || 0;
-    form.tax_amount = headerTax.value || 0;
+    form.discount_amount = calculatedDiscountAmount.value;
+    form.tax_amount = calculatedTaxAmount.value;
     form.shipping_cost = shippingCost.value || 0;
     form.paid_amount = paidAmount.value || 0;
     form.payment_method = paymentMethod.value;
@@ -211,10 +280,6 @@ const submitSale = () => {
             if (errors.error) alert(errors.error);
         },
     });
-};
-
-const formatCurrency = (amount: number) => {
-    return Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 </script>
 
@@ -292,7 +357,7 @@ const formatCurrency = (amount: number) => {
 
                                 <div class="mt-3 flex items-center justify-between border-t border-gray-100 dark:border-gray-800 pt-2">
                                     <div class="text-xs font-extrabold text-indigo-600 dark:text-indigo-400">
-                                        ${{ formatCurrency(Number(product.selling_price)) }}
+                                        {{ formatCurrency(Number(product.selling_price)) }}
                                     </div>
                                     <div
                                         class="text-[10px] px-1.5 py-0.5 rounded font-semibold"
@@ -318,10 +383,19 @@ const formatCurrency = (amount: number) => {
                             class="w-full text-xs rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-indigo-500"
                         >
                             <option :value="null">Walk-in Customer (Default)</option>
-                            <option v-for="c in customers" :key="c.id" :value="c.id">
+                            <option v-for="c in customerList" :key="c.id" :value="c.id">
                                 {{ c.name }} {{ c.phone ? `(${c.phone})` : '' }}
                             </option>
                         </select>
+
+                        <button
+                            type="button"
+                            @click="isCustomerModalOpen = true"
+                            class="px-2.5 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900 rounded-lg whitespace-nowrap transition-colors"
+                            title="Add New Customer"
+                        >
+                            + Create Customer
+                        </button>
                     </div>
                 </AppCard>
 
@@ -353,7 +427,7 @@ const formatCurrency = (amount: number) => {
                                         {{ item.product.name }}
                                     </div>
                                     <div class="text-[10px] text-gray-500">
-                                        ${{ formatCurrency(Number(item.product.selling_price)) }} / {{ item.product.unit?.short_name || 'unit' }}
+                                        {{ formatCurrency(Number(item.product.selling_price)) }} / {{ item.product.unit?.short_name || 'unit' }}
                                     </div>
                                 </div>
 
@@ -383,7 +457,7 @@ const formatCurrency = (amount: number) => {
 
                                 <!-- Line total -->
                                 <div class="text-xs font-bold text-gray-900 dark:text-gray-100 w-16 text-right">
-                                    ${{ formatCurrency(item.quantity * Number(item.product.selling_price)) }}
+                                    {{ formatCurrency(item.quantity * Number(item.product.selling_price)) }}
                                 </div>
 
                                 <!-- Delete item button -->
@@ -402,29 +476,54 @@ const formatCurrency = (amount: number) => {
                         <div class="space-y-1.5 text-xs">
                             <div class="flex justify-between text-gray-600 dark:text-gray-400">
                                 <span>Subtotal:</span>
-                                <span class="font-bold text-gray-900 dark:text-gray-100">${{ formatCurrency(subtotal) }}</span>
+                                <span class="font-bold text-gray-900 dark:text-gray-100">{{ formatCurrency(subtotal) }}</span>
                             </div>
 
+                            <!-- Flexible Discount Controls -->
                             <div class="grid grid-cols-2 gap-2 pt-1">
                                 <div>
-                                    <label class="text-[10px] text-gray-500 block">Discount ($)</label>
+                                    <label class="text-[10px] text-gray-500 block font-semibold">Discount Type</label>
+                                    <select
+                                        v-model="discountType"
+                                        class="w-full text-xs py-1 px-2 rounded border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
+                                    >
+                                        <option value="percentage">Percentage (%)</option>
+                                        <option value="fixed">Fixed Amount</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-[10px] text-gray-500 block font-semibold">
+                                        Discount {{ discountType === 'percentage' ? '(%)' : 'Amount' }}
+                                    </label>
                                     <input
                                         type="number"
                                         step="0.01"
                                         min="0"
-                                        v-model.number="headerDiscount"
+                                        :max="discountType === 'percentage' ? 100 : subtotal"
+                                        v-model.number="discountValue"
+                                        class="w-full text-xs py-1 px-2 rounded border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
+                                    />
+                                </div>
+                            </div>
+
+                            <!-- Tax Percentage & Calculated Amount -->
+                            <div class="grid grid-cols-2 gap-2 pt-1">
+                                <div>
+                                    <label class="text-[10px] text-gray-500 block font-semibold">Tax Rate (%)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        max="100"
+                                        v-model.number="taxRatePercent"
                                         class="w-full text-xs py-1 px-2 rounded border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
                                     />
                                 </div>
                                 <div>
-                                    <label class="text-[10px] text-gray-500 block">Tax ($)</label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        v-model.number="headerTax"
-                                        class="w-full text-xs py-1 px-2 rounded border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
-                                    />
+                                    <label class="text-[10px] text-gray-500 block font-semibold">Tax Amount</label>
+                                    <div class="py-1 px-2 bg-gray-100 dark:bg-gray-800 rounded text-xs font-bold text-gray-700 dark:text-gray-300">
+                                        {{ formatCurrency(calculatedTaxAmount) }}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -433,12 +532,12 @@ const formatCurrency = (amount: number) => {
                         <div class="p-3 bg-indigo-600 rounded-xl text-white flex items-center justify-between shadow-md">
                             <div>
                                 <span class="text-[10px] uppercase font-bold tracking-wider text-indigo-200 block">Grand Total</span>
-                                <span class="text-xl font-black">${{ formatCurrency(grandTotal) }}</span>
+                                <span class="text-xl font-black">{{ formatCurrency(grandTotal) }}</span>
                             </div>
                             <div class="text-right">
                                 <span class="text-[10px] uppercase font-bold tracking-wider text-indigo-200 block">Balance Due</span>
                                 <span class="text-sm font-bold" :class="dueAmount > 0 ? 'text-amber-300' : 'text-emerald-300'">
-                                    ${{ formatCurrency(dueAmount) }}
+                                    {{ formatCurrency(dueAmount) }}
                                 </span>
                             </div>
                         </div>
@@ -458,7 +557,7 @@ const formatCurrency = (amount: number) => {
                                 </select>
                             </div>
                             <div>
-                                <label class="text-[10px] text-gray-500 block font-semibold mb-0.5">Amount Paid ($)</label>
+                                <label class="text-[10px] text-gray-500 block font-semibold mb-0.5">Amount Paid</label>
                                 <input
                                     type="number"
                                     step="0.01"
@@ -486,5 +585,49 @@ const formatCurrency = (amount: number) => {
             </div>
 
         </div>
+
+        <!-- Add Customer Modal -->
+        <AppModal
+            :show="isCustomerModalOpen"
+            title="Create New Customer"
+            @close="isCustomerModalOpen = false"
+        >
+            <form @submit.prevent="submitNewCustomer" class="space-y-4">
+                <div>
+                    <AppInput
+                        label="Customer Name"
+                        v-model="customerForm.name"
+                        :error="customerForm.errors.name"
+                        required
+                    />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <AppInput
+                        label="Phone Number"
+                        v-model="customerForm.phone"
+                        :error="customerForm.errors.phone"
+                    />
+                    <AppInput
+                        label="Email Address"
+                        type="email"
+                        v-model="customerForm.email"
+                        :error="customerForm.errors.email"
+                    />
+                </div>
+                <div>
+                    <AppInput
+                        label="Address"
+                        v-model="customerForm.address"
+                        :error="customerForm.errors.address"
+                    />
+                </div>
+                <div class="flex justify-end space-x-2 pt-3">
+                    <AppButton variant="secondary" @click="isCustomerModalOpen = false">Cancel</AppButton>
+                    <AppButton variant="primary" :loading="customerForm.processing" @click="submitNewCustomer">
+                        Create & Select
+                    </AppButton>
+                </div>
+            </form>
+        </AppModal>
     </AppLayout>
 </template>

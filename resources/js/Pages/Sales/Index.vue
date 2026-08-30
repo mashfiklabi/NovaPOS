@@ -2,6 +2,7 @@
 import { ref, watch, computed } from 'vue';
 import { Head, Link, router, usePage, useForm } from '@inertiajs/vue3';
 import { PageProps, Sale, PaginatedData } from '@/types';
+import { formatCurrency, formatDate } from '@/Composables/useFormatters';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AppCard from '@/Components/AppCard.vue';
 import PageHeader from '@/Components/PageHeader.vue';
@@ -163,10 +164,6 @@ const exportCSV = () => {
     window.location.href = '/sales/export';
 };
 
-const formatCurrency = (amount: string | number) => {
-    return Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-};
-
 // Payment Modal State
 const paymentSale = ref<Sale | null>(null);
 const paymentForm = useForm({
@@ -215,6 +212,14 @@ const submitPayment = () => {
                     >
                         Export CSV
                     </AppButton>
+
+                    <Link
+                        v-if="hasPermission('sales.create')"
+                        href="/sales/create"
+                        class="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-sm transition-colors"
+                    >
+                        + Create Sale / POS
+                    </Link>
                 </div>
             </template>
         </PageHeader>
@@ -325,14 +330,14 @@ const submitPayment = () => {
                             {{ sale.customer ? sale.customer.name : 'Walk-in Customer' }}
                         </td>
                         <td class="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">
-                            {{ sale.sale_date }}
+                            {{ formatDate(sale.sale_date) }}
                         </td>
                         <td class="px-6 py-4 text-sm font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">
-                            ${{ formatCurrency(sale.grand_total) }}
+                            {{ formatCurrency(sale.grand_total) }}
                         </td>
                         <td class="px-6 py-4 text-xs whitespace-nowrap text-gray-500">
-                            <div>Paid: <span class="font-semibold text-gray-700 dark:text-gray-300">${{ formatCurrency(sale.paid_amount) }}</span></div>
-                            <div>Due: <span class="font-semibold text-red-600 dark:text-red-400">${{ formatCurrency(sale.due_amount) }}</span></div>
+                            <div>Paid: <span class="font-semibold text-gray-700 dark:text-gray-300">{{ formatCurrency(sale.paid_amount) }}</span></div>
+                            <div>Due: <span class="font-semibold text-red-600 dark:text-red-400">{{ formatCurrency(sale.due_amount) }}</span></div>
                         </td>
                         <td class="px-6 py-4 text-sm whitespace-nowrap">
                             <span
@@ -377,6 +382,15 @@ const submitPayment = () => {
                                     title="View Invoice Details"
                                 >
                                     <Heroicon name="EyeIcon" class="h-4 w-4" />
+                                </Link>
+
+                                <Link
+                                    v-if="sale.status !== 'cancelled' && hasPermission('sales.update')"
+                                    :href="`/sales/${sale.id}/edit`"
+                                    class="inline-block p-1 text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"
+                                    title="Edit Sale"
+                                >
+                                    <Heroicon name="PencilIcon" class="h-4 w-4" />
                                 </Link>
 
                                 <button
@@ -437,10 +451,10 @@ const submitPayment = () => {
                         Recording payment for Invoice <strong>#{{ paymentSale?.invoice_number }}</strong>
                     </p>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                        Total: <strong>${{ formatCurrency(paymentSale?.grand_total || 0) }}</strong> | Paid: <strong>${{ formatCurrency(paymentSale?.paid_amount || 0) }}</strong> | Outstanding Due: <strong class="text-red-600 dark:text-red-400">${{ formatCurrency(paymentSale?.due_amount || 0) }}</strong>
+                        Total: <strong>{{ formatCurrency(paymentSale?.grand_total || 0) }}</strong> | Paid: <strong>{{ formatCurrency(paymentSale?.paid_amount || 0) }}</strong> | Outstanding Due: <strong class="text-red-600 dark:text-red-400">{{ formatCurrency(paymentSale?.due_amount || 0) }}</strong>
                     </p>
                     <AppInput
-                        label="Payment Amount ($)"
+                        label="Payment Amount"
                         type="number"
                         step="0.01"
                         min="0.01"
