@@ -48,6 +48,23 @@ export interface Customer {
     deleted_at: string | null;
 }
 
+export interface POSProduct {
+    id: number;
+    name: string;
+    sku: string;
+    barcode: string | null;
+    selling_price: string | number;
+    current_stock: string | number;
+    allow_decimal: boolean;
+    tax_type: string | null;
+    tax_rate: string | number;
+    unit?: {
+        id: number;
+        name: string;
+        short_name: string;
+    } | null;
+}
+
 export interface SaleItem {
     id: number;
     sale_id: number;

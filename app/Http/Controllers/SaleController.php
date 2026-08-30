@@ -88,7 +88,8 @@ class SaleController extends Controller
             ->get();
 
         $products = Product::where('status', 'active')
-            ->select('id', 'name', 'sku', 'selling_price', 'current_stock', 'allow_decimal', 'tax_type', 'tax_rate')
+            ->select('id', 'name', 'sku', 'barcode', 'selling_price', 'current_stock', 'allow_decimal', 'tax_type', 'tax_rate')
+            ->with('unit:id,name,short_name')
             ->orderBy('name')
             ->get();
 

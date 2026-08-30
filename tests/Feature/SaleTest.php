@@ -62,6 +62,22 @@ class SaleTest extends TestCase
         $response->assertStatus(200);
     }
 
+    public function test_authorized_user_can_access_pos_create_page(): void
+    {
+        $response = $this->actingAs($this->adminUser)->get(route('sales.create'));
+
+        $response->assertStatus(200);
+    }
+
+    public function test_unauthorized_user_cannot_access_pos_create_page(): void
+    {
+        $unauthorizedUser = User::factory()->create(['status' => 'active']);
+
+        $response = $this->actingAs($unauthorizedUser)->get(route('sales.create'));
+
+        $response->assertStatus(403);
+    }
+
     public function test_sale_can_be_created_and_items_stored_correctly(): void
     {
         $payload = [
