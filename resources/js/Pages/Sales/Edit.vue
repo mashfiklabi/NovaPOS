@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
-import { Head, useForm, Link, usePage } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
+import { Head, useForm, Link } from '@inertiajs/vue3';
 import { PageProps, POSProduct, Sale } from '@/types';
 import { formatCurrency } from '@/Composables/useFormatters';
 import AppLayout from '@/Layouts/AppLayout.vue';
@@ -8,6 +8,7 @@ import AppCard from '@/Components/AppCard.vue';
 import PageHeader from '@/Components/PageHeader.vue';
 import AppInput from '@/Components/AppInput.vue';
 import AppButton from '@/Components/AppButton.vue';
+import AppSelect from '@/Components/AppSelect.vue';
 import Heroicon from '@/Components/Heroicon.vue';
 
 interface EditableItem {
@@ -22,8 +23,6 @@ const props = defineProps<{
     customers: Array<{ id: number; name: string; phone: string | null }>;
     products: POSProduct[];
 }>();
-
-const page = usePage<PageProps>();
 
 // Initialize edit items from existing sale
 const cart = ref<EditableItem[]>(
@@ -49,10 +48,33 @@ const cart = ref<EditableItem[]>(
 );
 
 const selectedCustomerId = ref<number | null>(props.sale.customer_id);
+const saleStatus = ref<string>(props.sale.status);
 const headerDiscount = ref<number>(Number(props.sale.discount_amount || 0));
 const headerTax = ref<number>(Number(props.sale.tax_amount || 0));
 const shippingCost = ref<number>(Number(props.sale.shipping_cost || 0));
 const notes = ref<string>(props.sale.notes || '');
+
+// Product addition to edit cart
+const selectedProductId = ref<number | null>(null);
+
+const addProductToCart = () => {
+    if (!selectedProductId.value) return;
+    const prod = props.products.find(p => p.id === selectedProductId.value);
+    if (!prod) return;
+
+    const existingIndex = cart.value.findIndex(i => i.product.id === prod.id);
+    if (existingIndex > -1) {
+        cart.value[existingIndex].quantity += 1;
+    } else {
+        cart.value.push({
+            product: prod,
+            quantity: 1,
+            discount_amount: 0,
+            tax_amount: 0,
+        });
+    }
+    selectedProductId.value = null;
+};
 
 const updateQuantity = (index: number, newQty: number) => {
     if (newQty <= 0) {
@@ -77,6 +99,7 @@ const grandTotal = computed(() => {
 const form = useForm({
     customer_id: selectedCustomerId.value,
     sale_date: props.sale.sale_date,
+    status: saleStatus.value,
     items: [] as Array<{
         product_id: number;
         quantity: number;
@@ -96,6 +119,7 @@ const submitEdit = () => {
     }
 
     form.customer_id = selectedCustomerId.value;
+    form.status = saleStatus.value;
     form.discount_amount = headerDiscount.value || 0;
     form.tax_amount = headerTax.value || 0;
     form.shipping_cost = shippingCost.value || 0;
@@ -120,7 +144,7 @@ const submitEdit = () => {
     <AppLayout>
         <Head :title="`Edit Sale ${sale.invoice_number}`" />
 
-        <PageHeader :title="`Edit Sale: ${sale.invoice_number}`" :breadcrumbs="[{ name: 'Sales', href: '/sales' }, { name: sale.invoice_number, href: `/sales/${sale.id}` }, { name: 'Edit' }]">
+        <PageHeader :title="`Edit Sale Order: ${sale.invoice_number}`" :breadcrumbs="[{ name: 'Sales', href: '/sales' }, { name: sale.invoice_number, href: `/sales/${sale.id}` }, { name: 'Edit' }]">
             <template #actions>
                 <Link
                     :href="`/sales/${sale.id}`"
@@ -132,9 +156,28 @@ const submitEdit = () => {
         </PageHeader>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Items & Form -->
+            <!-- Left Column: Items & Add Product -->
             <div class="lg:col-span-2 space-y-6">
-                <AppCard title="Sale Items & Quantities">
+                <!-- Add Product Control -->
+                <AppCard title="Add Products to Sale">
+                    <div class="flex items-center space-x-2">
+                        <select
+                            v-model="selectedProductId"
+                            class="w-full text-xs rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-indigo-500"
+                        >
+                            <option :value="null">-- Select Product to Add --</option>
+                            <option v-for="p in products" :key="p.id" :value="p.id">
+                                {{ p.name }} (SKU: {{ p.sku }}) - {{ formatCurrency(Number(p.selling_price)) }}
+                            </option>
+                        </select>
+                        <AppButton variant="secondary" size="sm" @click="addProductToCart" :disabled="!selectedProductId">
+                            + Add Item
+                        </AppButton>
+                    </div>
+                </AppCard>
+
+                <!-- Line Items Table -->
+                <AppCard title="Current Items in Order">
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-800 text-sm">
                             <thead>
@@ -142,7 +185,7 @@ const submitEdit = () => {
                                     <th class="py-3 px-3">Product</th>
                                     <th class="py-3 px-3 text-right">Qty</th>
                                     <th class="py-3 px-3 text-right">Unit Price</th>
-                                    <th class="py-3 px-3 text-right">Total</th>
+                                    <th class="py-3 px-3 text-right">Line Total</th>
                                     <th class="py-3 px-3 text-right">Action</th>
                                 </tr>
                             </thead>
@@ -183,21 +226,38 @@ const submitEdit = () => {
                 </AppCard>
             </div>
 
-            <!-- Customer & Totals -->
+            <!-- Right Column: Status, Customer & Totals -->
             <div class="space-y-6">
-                <AppCard title="Customer Details">
-                    <select
-                        v-model="selectedCustomerId"
-                        class="w-full text-xs rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-indigo-500"
-                    >
-                        <option :value="null">Walk-in Customer (Default)</option>
-                        <option v-for="c in customers" :key="c.id" :value="c.id">
-                            {{ c.name }} {{ c.phone ? `(${c.phone})` : '' }}
-                        </option>
-                    </select>
+                <AppCard title="Sale Status & Customer">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-xs font-semibold text-gray-700 dark:text-gray-300 block mb-1">Customer</label>
+                            <select
+                                v-model="selectedCustomerId"
+                                class="w-full text-xs rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-indigo-500"
+                            >
+                                <option :value="null">Walk-in Customer (Default)</option>
+                                <option v-for="c in customers" :key="c.id" :value="c.id">
+                                    {{ c.name }} {{ c.phone ? `(${c.phone})` : '' }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <AppSelect
+                                label="Sale Order Status"
+                                v-model="saleStatus"
+                                :options="[
+                                    { value: 'draft', label: 'Draft' },
+                                    { value: 'completed', label: 'Completed' },
+                                    { value: 'cancelled', label: 'Cancelled' }
+                                ]"
+                            />
+                        </div>
+                    </div>
                 </AppCard>
 
-                <AppCard title="Order Summary">
+                <AppCard title="Order Financial Summary">
                     <div class="space-y-3 text-sm">
                         <div class="flex justify-between text-gray-600 dark:text-gray-400">
                             <span>Subtotal:</span>
@@ -205,7 +265,7 @@ const submitEdit = () => {
                         </div>
 
                         <div>
-                            <label class="text-xs text-gray-500 block">Header Discount ($)</label>
+                            <label class="text-xs text-gray-500 block">Header Discount</label>
                             <input
                                 type="number"
                                 step="0.01"
@@ -216,7 +276,7 @@ const submitEdit = () => {
                         </div>
 
                         <div>
-                            <label class="text-xs text-gray-500 block">Header Tax ($)</label>
+                            <label class="text-xs text-gray-500 block">Header Tax</label>
                             <input
                                 type="number"
                                 step="0.01"
@@ -231,6 +291,11 @@ const submitEdit = () => {
                             <span class="text-indigo-600 dark:text-indigo-400">{{ formatCurrency(grandTotal) }}</span>
                         </div>
 
+                        <div class="text-xs text-gray-500 border-t border-gray-100 dark:border-gray-800 pt-2 flex justify-between">
+                            <span>Recorded Payments:</span>
+                            <span class="font-bold">{{ formatCurrency(props.sale.paid_amount) }}</span>
+                        </div>
+
                         <AppButton
                             variant="primary"
                             size="lg"
@@ -238,7 +303,7 @@ const submitEdit = () => {
                             :loading="form.processing"
                             @click="submitEdit"
                         >
-                            Save Changes
+                            Save Order Changes
                         </AppButton>
                     </div>
                 </AppCard>

@@ -36,4 +36,27 @@ class StoreProductRequest extends FormRequest
             'tax_rate' => 'required|numeric|min:0',
         ];
     }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator) {
+            $unitId = $this->input('unit_id');
+            if (! $unitId) {
+                return;
+            }
+
+            $unit = \App\Models\Unit::find($unitId);
+            if ($unit && $unit->allow_decimal === 'disallowed') {
+                $stock = $this->input('current_stock');
+                if ($stock !== null && floor((float) $stock) != (float) $stock) {
+                    $validator->errors()->add('current_stock', "Unit '{$unit->name}' does not allow decimal quantities for stock.");
+                }
+
+                $alert = $this->input('stock_alert_threshold');
+                if ($alert !== null && floor((float) $alert) != (float) $alert) {
+                    $validator->errors()->add('stock_alert_threshold', "Unit '{$unit->name}' does not allow decimal quantities for alert threshold.");
+                }
+            }
+        });
+    }
 }

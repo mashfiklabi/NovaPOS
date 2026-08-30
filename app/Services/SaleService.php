@@ -53,6 +53,23 @@ class SaleService
 
             foreach ($totals['items'] as $itemData) {
                 $sale->items()->create($itemData);
+
+                // Inventory deduction for tracked products
+                $product = Product::find($itemData['product_id']);
+                if ($product && $product->track_stock && $data['status'] === SaleStatus::COMPLETED->value) {
+                    $product->decrement('current_stock', $itemData['quantity']);
+                    $freshProduct = $product->fresh();
+
+                    \App\Models\StockMovement::create([
+                        'product_id' => $product->id,
+                        'movement_type' => \App\Enums\StockMovementType::OUT,
+                        'quantity' => -$itemData['quantity'],
+                        'reference_type' => Sale::class,
+                        'reference_id' => $sale->id,
+                        'balance_after' => $freshProduct->current_stock,
+                        'created_by' => $userId,
+                    ]);
+                }
             }
 
             if ($sale->paid_amount > 0) {
@@ -88,11 +105,28 @@ class SaleService
             throw new InvalidArgumentException('An authenticated user is required for sales operations.');
         }
 
-        return DB::transaction(function () use ($sale, $data) {
+        return DB::transaction(function () use ($sale, $data, $userId) {
             $lockedSale = Sale::where('id', $sale->id)->lockForUpdate()->firstOrFail();
 
-            if ($lockedSale->status === SaleStatus::CANCELLED) {
-                throw new InvalidArgumentException('Cannot edit a cancelled sale.');
+            // Reverse old stock deductions if previous status was COMPLETED
+            if ($lockedSale->status === SaleStatus::COMPLETED) {
+                foreach ($lockedSale->items as $oldItem) {
+                    $product = Product::find($oldItem->product_id);
+                    if ($product && $product->track_stock) {
+                        $product->increment('current_stock', $oldItem->quantity);
+                        $freshProduct = $product->fresh();
+
+                        \App\Models\StockMovement::create([
+                            'product_id' => $product->id,
+                            'movement_type' => \App\Enums\StockMovementType::ADJUSTMENT,
+                            'quantity' => $oldItem->quantity,
+                            'reference_type' => Sale::class,
+                            'reference_id' => $lockedSale->id,
+                            'balance_after' => $freshProduct->current_stock,
+                            'created_by' => $userId,
+                        ]);
+                    }
+                }
             }
 
             $itemsData = $data['items'] ?? [];
@@ -118,10 +152,28 @@ class SaleService
 
             $lockedSale->update($data);
 
-            // Re-create items
+            // Re-create items and apply new stock deduction if updated status is COMPLETED
             $lockedSale->items()->delete();
             foreach ($totals['items'] as $itemData) {
                 $lockedSale->items()->create($itemData);
+
+                if ($lockedSale->status === SaleStatus::COMPLETED) {
+                    $product = Product::find($itemData['product_id']);
+                    if ($product && $product->track_stock) {
+                        $product->decrement('current_stock', $itemData['quantity']);
+                        $freshProduct = $product->fresh();
+
+                        \App\Models\StockMovement::create([
+                            'product_id' => $product->id,
+                            'movement_type' => \App\Enums\StockMovementType::OUT,
+                            'quantity' => -$itemData['quantity'],
+                            'reference_type' => Sale::class,
+                            'reference_id' => $lockedSale->id,
+                            'balance_after' => $freshProduct->current_stock,
+                            'created_by' => $userId,
+                        ]);
+                    }
+                }
             }
 
             return $lockedSale->load('items.product', 'customer', 'payments');
@@ -206,18 +258,46 @@ class SaleService
      */
     public function cancel(Sale $sale): Sale
     {
-        return DB::transaction(function () use ($sale) {
-            $sale->update([
+        $userId = Auth::id();
+        return DB::transaction(function () use ($sale, $userId) {
+            $lockedSale = Sale::where('id', $sale->id)->lockForUpdate()->firstOrFail();
+
+            if ($lockedSale->status === SaleStatus::CANCELLED) {
+                return $lockedSale;
+            }
+
+            // Restore stock if cancelling a completed sale
+            if ($lockedSale->status === SaleStatus::COMPLETED) {
+                foreach ($lockedSale->items as $item) {
+                    $product = Product::find($item->product_id);
+                    if ($product && $product->track_stock) {
+                        $product->increment('current_stock', $item->quantity);
+                        $freshProduct = $product->fresh();
+
+                        \App\Models\StockMovement::create([
+                            'product_id' => $product->id,
+                            'movement_type' => \App\Enums\StockMovementType::ADJUSTMENT,
+                            'quantity' => $item->quantity,
+                            'reference_type' => Sale::class,
+                            'reference_id' => $lockedSale->id,
+                            'balance_after' => $freshProduct->current_stock,
+                            'created_by' => $userId,
+                        ]);
+                    }
+                }
+            }
+
+            $lockedSale->update([
                 'status' => SaleStatus::CANCELLED,
             ]);
 
             NotificationService::notifyAdminsAndManagers(
                 'Sale Cancelled',
-                "Invoice #{$sale->invoice_number} was CANCELLED.",
-                "/sales/{$sale->id}"
+                "Invoice #{$lockedSale->invoice_number} was CANCELLED.",
+                "/sales/{$lockedSale->id}"
             );
 
-            return $sale;
+            return $lockedSale;
         });
     }
 

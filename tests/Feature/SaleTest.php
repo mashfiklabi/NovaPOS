@@ -341,6 +341,105 @@ class SaleTest extends TestCase
         $response->assertSessionHasErrors(['error']);
     }
 
+    public function test_sale_creation_decrements_tracked_product_stock(): void
+    {
+        $product = Product::factory()->create([
+            'status' => 'active',
+            'selling_price' => 50.00,
+            'current_stock' => 10.000,
+            'track_stock' => true,
+        ]);
+
+        $payload = [
+            'customer_id' => $this->customer->id,
+            'sale_date' => now()->format('Y-m-d'),
+            'status' => 'completed',
+            'items' => [
+                [
+                    'product_id' => $product->id,
+                    'quantity' => 3,
+                ],
+            ],
+            'paid_amount' => 150.00,
+        ];
+
+        $response = $this->actingAs($this->adminUser)->post(route('sales.store'), $payload);
+
+        $response->assertRedirect();
+        $this->assertEquals(7.000, $product->fresh()->current_stock);
+    }
+
+    public function test_sale_update_adjusts_product_stock_correctly(): void
+    {
+        $product = Product::factory()->create([
+            'status' => 'active',
+            'selling_price' => 50.00,
+            'current_stock' => 7.000,
+            'track_stock' => true,
+        ]);
+
+        $sale = Sale::factory()->create([
+            'customer_id' => $this->customer->id,
+            'status' => SaleStatus::COMPLETED,
+        ]);
+        $sale->items()->create([
+            'product_id' => $product->id,
+            'quantity' => 3,
+            'unit_price' => 50.00,
+            'subtotal' => 150.00,
+            'total' => 150.00,
+        ]);
+
+        // Edit sale quantity from 3 to 5
+        $updatePayload = [
+            'customer_id' => $this->customer->id,
+            'sale_date' => now()->format('Y-m-d'),
+            'status' => 'completed',
+            'items' => [
+                [
+                    'product_id' => $product->id,
+                    'quantity' => 5,
+                ],
+            ],
+            'paid_amount' => 250.00,
+        ];
+
+        $response = $this->actingAs($this->adminUser)->put(route('sales.update', $sale), $updatePayload);
+
+        $response->assertRedirect();
+        // Previous stock 7 + 3 (old) - 5 (new) = 5
+        $this->assertEquals(5.000, $product->fresh()->current_stock);
+    }
+
+    public function test_sale_cancellation_restores_product_stock(): void
+    {
+        $product = Product::factory()->create([
+            'status' => 'active',
+            'selling_price' => 50.00,
+            'current_stock' => 7.000,
+            'track_stock' => true,
+        ]);
+
+        $sale = Sale::factory()->create([
+            'customer_id' => $this->customer->id,
+            'status' => SaleStatus::COMPLETED,
+        ]);
+        $sale->items()->create([
+            'product_id' => $product->id,
+            'quantity' => 3,
+            'unit_price' => 50.00,
+            'subtotal' => 150.00,
+            'total' => 150.00,
+        ]);
+
+        $response = $this->actingAs($this->adminUser)->post(route('sales.cancel', $sale));
+
+        $response->assertRedirect();
+        // 7 + 3 restored = 10
+        $this->assertEquals(10.000, $product->fresh()->current_stock);
+        $this->assertEquals(SaleStatus::CANCELLED, $sale->fresh()->status);
+    }
+
     public function test_payment_cannot_be_recorded_for_cancelled_sale(): void
     {
         $sale = Sale::factory()->create([
