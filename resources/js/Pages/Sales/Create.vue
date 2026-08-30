@@ -52,19 +52,23 @@ const customerForm = useForm({
 const submitNewCustomer = () => {
     customerForm.post('/customers', {
         preserveScroll: true,
-        onSuccess: () => {
+        onSuccess: (pageProps) => {
             isCustomerModalOpen.value = false;
             customerForm.reset();
-            // Refresh customers list from server
+            // Auto-select exact newly created customer using shared flash payload ID
             router.reload({
-                only: ['customers'],
-                onSuccess: (page) => {
-                    const latestCustomers = (page.props as any).customers || [];
-                    customerList.value = latestCustomers;
-                    // Auto-select the newly created customer (last item or match name)
-                    const newlyCreated = latestCustomers[latestCustomers.length - 1];
-                    if (newlyCreated) {
-                        selectedCustomerId.value = newlyCreated.id;
+                only: ['customers', 'flash'],
+                onSuccess: (updatedPage) => {
+                    const propsData = updatedPage.props as unknown as PageProps & {
+                        flash?: { created_customer_id?: number };
+                        customers?: Array<{ id: number; name: string; phone: string | null }>;
+                    };
+                    if (propsData.customers) {
+                        customerList.value = propsData.customers;
+                    }
+                    const newId = propsData.flash?.created_customer_id;
+                    if (newId) {
+                        selectedCustomerId.value = newId;
                     }
                 }
             });

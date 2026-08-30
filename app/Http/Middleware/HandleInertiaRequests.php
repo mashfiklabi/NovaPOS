@@ -96,6 +96,11 @@ class HandleInertiaRequests extends Middleware
                 'logo' => $settings['logo'] ?? null,
                 'favicon' => $settings['favicon'] ?? null,
             ],
+            'flash' => [
+                'success' => fn () => $request->session()->get('success'),
+                'error' => fn () => $request->session()->get('error'),
+                'created_customer_id' => fn () => $request->session()->get('created_customer_id'),
+            ],
         ];
     }
 }
