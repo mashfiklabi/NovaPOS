@@ -292,13 +292,13 @@ class DatabaseSeeder extends Seeder
             ],
             [
                 'key' => 'currency',
-                'value' => 'USD',
+                'value' => 'BDT',
                 'group' => 'localization',
                 'type' => 'text',
             ],
             [
                 'key' => 'timezone',
-                'value' => 'UTC',
+                'value' => 'Asia/Dhaka',
                 'group' => 'localization',
                 'type' => 'text',
             ],

@@ -4,8 +4,10 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import AppCard from '@/Components/AppCard.vue';
 import PageHeader from '@/Components/PageHeader.vue';
 import AppInput from '@/Components/AppInput.vue';
+import AppSelect from '@/Components/AppSelect.vue';
 import AppButton from '@/Components/AppButton.vue';
 import AppTextarea from '@/Components/AppTextarea.vue';
+import { CURRENCY_OPTIONS, TIMEZONE_OPTIONS } from '@/Constants/localization';
 
 interface SettingItem {
     id: number;
@@ -37,13 +39,18 @@ const form = useForm({
     phone: props.settings.phone ?? '',
     email: props.settings.email ?? '',
     address: props.settings.address ?? '',
-    currency: props.settings.currency ?? 'USD',
-    timezone: props.settings.timezone ?? 'UTC',
+    currency: props.settings.currency ?? 'BDT',
+    timezone: props.settings.timezone ?? 'Asia/Dhaka',
     invoice_prefix: props.settings.invoice_prefix ?? 'INV-',
     tax_rate: String(props.settings.tax_rate ?? '0'),
     logo: null as File | null,
     favicon: null as File | null,
 });
+
+const currencySelectOptions = CURRENCY_OPTIONS.map(c => ({
+    value: c.code,
+    label: c.label,
+}));
 
 const handleFile = (field: 'logo' | 'favicon', event: Event) => {
     const files = (event.target as HTMLInputElement).files;
@@ -53,7 +60,6 @@ const handleFile = (field: 'logo' | 'favicon', event: Event) => {
 };
 
 const submit = () => {
-    // We use post to /settings to allow file uploads (multipart/form-data)
     form.post('/settings', {
         preserveScroll: true,
     });
@@ -109,21 +115,23 @@ const submit = () => {
                 </AppCard>
 
                 <!-- Group 2: POS & Pricing Settings -->
-                <AppCard title="Localization & POS Checkout Properties" subtitle="Adjust invoice styles, standard taxes, and currency attributes.">
+                <AppCard title="Localization & POS Checkout Properties" subtitle="Select official system currency, local timezone, invoice styles, and taxes.">
                     <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6 mt-4">
                         <div class="sm:col-span-3">
-                            <AppInput
-                                label="Currency Symbol/Code"
+                            <AppSelect
+                                label="Currency"
                                 v-model="form.currency"
+                                :options="currencySelectOptions"
                                 :error="form.errors.currency"
                                 required
                             />
                         </div>
 
                         <div class="sm:col-span-3">
-                            <AppInput
+                            <AppSelect
                                 label="Local Timezone"
                                 v-model="form.timezone"
+                                :options="TIMEZONE_OPTIONS"
                                 :error="form.errors.timezone"
                                 required
                             />
