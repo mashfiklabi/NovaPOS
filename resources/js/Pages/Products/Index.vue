@@ -2,6 +2,7 @@
 import { ref, watch, computed } from 'vue';
 import { Head, useForm, router, usePage } from '@inertiajs/vue3';
 import { PageProps } from '@/types';
+import { formatCurrency } from '@/Composables/useFormatters';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AppCard from '@/Components/AppCard.vue';
 import PageHeader from '@/Components/PageHeader.vue';
@@ -282,10 +283,6 @@ const bulkRestore = () => {
     }
 };
 
-const formatPrice = (value: string) => {
-    return Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-};
-
 const formatStock = (value: string, shortName: string) => {
     const formattedVal = Number(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
     return `${formattedVal} ${shortName}`;
@@ -424,8 +421,8 @@ const exportCSV = () => {
                             <p class="text-xs text-gray-400">{{ product.brand ? product.brand.name : 'No Brand' }}</p>
                         </td>
                         <td class="px-6 py-4 text-sm whitespace-nowrap">
-                            <p class="text-gray-500 text-xs">Cost: <span class="font-mono font-medium">${{ formatPrice(product.cost_price) }}</span></p>
-                            <p class="text-indigo-600 dark:text-indigo-400 font-bold">Sell: <span class="font-mono">${{ formatPrice(product.selling_price) }}</span></p>
+                            <p class="text-gray-500 text-xs">Cost: <span class="font-mono font-medium">{{ formatCurrency(product.cost_price) }}</span></p>
+                            <p class="text-indigo-600 dark:text-indigo-400 font-bold">Sell: <span class="font-mono">{{ formatCurrency(product.selling_price) }}</span></p>
                         </td>
                         <td class="px-6 py-4 text-sm whitespace-nowrap">
                             <p
@@ -554,8 +551,8 @@ const exportCSV = () => {
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
-                    <AppInput label="Cost Price ($)" type="number" step="0.01" v-model="form.cost_price" :error="form.errors.cost_price" required />
-                    <AppInput label="Selling Price ($)" type="number" step="0.01" v-model="form.selling_price" :error="form.errors.selling_price" required />
+                    <AppInput label="Cost Price" type="number" step="0.01" v-model="form.cost_price" :error="form.errors.cost_price" required />
+                    <AppInput label="Selling Price" type="number" step="0.01" v-model="form.selling_price" :error="form.errors.selling_price" required />
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">

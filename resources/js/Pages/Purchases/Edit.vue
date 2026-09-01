@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { Head, useForm, Link } from '@inertiajs/vue3';
+import { formatCurrency } from '@/Composables/useFormatters';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AppCard from '@/Components/AppCard.vue';
 import PageHeader from '@/Components/PageHeader.vue';
@@ -150,9 +151,6 @@ const submit = () => {
     });
 };
 
-const formatCurrency = (amount: number) => {
-    return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-};
 </script>
 
 <template>
@@ -305,7 +303,7 @@ const formatCurrency = (amount: number) => {
                                         />
                                     </td>
                                     <td class="py-2 px-2 text-right font-bold text-gray-900 dark:text-gray-100">
-                                        ${{ formatCurrency(calculateLineTotal(item)) }}
+                                        {{ formatCurrency(calculateLineTotal(item)) }}
                                     </td>
                                     <td class="py-2 px-2 text-center">
                                         <button
@@ -332,12 +330,12 @@ const formatCurrency = (amount: number) => {
                     <div class="space-y-4">
                         <div class="flex justify-between items-center text-sm font-medium text-gray-600 dark:text-gray-400">
                             <span>Subtotal:</span>
-                            <span class="font-bold text-gray-900 dark:text-gray-100">${{ formatCurrency(subtotal) }}</span>
+                            <span class="font-bold text-gray-900 dark:text-gray-100">{{ formatCurrency(subtotal) }}</span>
                         </div>
 
                         <div>
                             <AppInput
-                                label="Header Discount ($)"
+                                label="Header Discount"
                                 type="number"
                                 step="0.01"
                                 min="0"
@@ -348,7 +346,7 @@ const formatCurrency = (amount: number) => {
 
                         <div>
                             <AppInput
-                                label="Header Tax ($)"
+                                label="Header Tax"
                                 type="number"
                                 step="0.01"
                                 min="0"
@@ -359,7 +357,7 @@ const formatCurrency = (amount: number) => {
 
                         <div>
                             <AppInput
-                                label="Shipping Cost ($)"
+                                label="Shipping Cost"
                                 type="number"
                                 step="0.01"
                                 min="0"
@@ -370,12 +368,12 @@ const formatCurrency = (amount: number) => {
 
                         <div class="border-t border-gray-200 dark:border-gray-800 pt-3 flex justify-between items-center text-base font-bold text-gray-900 dark:text-gray-100">
                             <span>Grand Total:</span>
-                            <span class="text-indigo-600 dark:text-indigo-400 text-lg">${{ formatCurrency(grandTotal) }}</span>
+                            <span class="text-indigo-600 dark:text-indigo-400 text-lg">{{ formatCurrency(grandTotal) }}</span>
                         </div>
 
                         <div>
                             <AppInput
-                                label="Paid Amount ($)"
+                                label="Paid Amount"
                                 type="number"
                                 step="0.01"
                                 min="0"
@@ -386,7 +384,7 @@ const formatCurrency = (amount: number) => {
 
                         <div class="flex justify-between items-center text-sm font-medium text-red-600 dark:text-red-400">
                             <span>Due Amount:</span>
-                            <span class="font-bold">${{ formatCurrency(dueAmount) }}</span>
+                            <span class="font-bold">{{ formatCurrency(dueAmount) }}</span>
                         </div>
 
                         <div class="pt-4 border-t border-gray-200 dark:border-gray-800">
