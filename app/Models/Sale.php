@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\CreditLedgerType;
 use App\Enums\PaymentStatus;
+use App\Enums\RefundStatus;
 use App\Enums\SaleStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -69,6 +71,34 @@ class Sale extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(SalePayment::class);
+    }
+
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(SaleRefund::class);
+    }
+
+    public function creditLedgers(): HasMany
+    {
+        return $this->hasMany(CustomerCreditLedger::class);
+    }
+
+    public function getSettledAmountAttribute(): float
+    {
+        $refundedSum = (float) $this->refunds()->where('status', RefundStatus::COMPLETED)->sum('amount');
+        $creditedSum = (float) $this->creditLedgers()->where('type', CreditLedgerType::CREDIT)->sum('amount');
+
+        return round($refundedSum + $creditedSum, 2);
+    }
+
+    public function getEligibleSettlementAmountAttribute(): float
+    {
+        $paid = (float) $this->paid_amount;
+        $settled = $this->settled_amount;
+
+        $remaining = round($paid - $settled, 2);
+
+        return $remaining > 0 ? $remaining : 0.0;
     }
 
     public function creator(): BelongsTo

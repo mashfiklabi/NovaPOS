@@ -44,9 +44,18 @@ class CustomerController extends Controller
                 ->orWhere('email', 'like', "%{$search}%")
                 ->orWhere('phone', 'like', "%{$search}%");
         })
+            ->with(['creditLedgers' => function ($lq) {
+                $lq->orderBy('id', 'desc')->take(10);
+            }])
             ->orderBy('id', 'desc')
             ->paginate(10)
             ->withQueryString();
+
+        $customers->getCollection()->transform(function ($customer) {
+            $customer->store_credit_balance = $customer->store_credit_balance;
+
+            return $customer;
+        });
 
         return Inertia::render('Customers/Index', [
             'customers' => $customers,

@@ -96,6 +96,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('sales/{id}/restore', [SaleController::class, 'restore'])->name('sales.restore');
     Route::post('sales/{sale}/cancel', [SaleController::class, 'cancel'])->name('sales.cancel');
     Route::post('sales/{sale}/pay', [SaleController::class, 'pay'])->name('sales.pay');
+    Route::post('sales/{sale}/refund', [SaleController::class, 'refund'])->name('sales.refund');
+    Route::post('sales/{sale}/credit', [SaleController::class, 'credit'])->name('sales.credit');
     Route::resource('sales', SaleController::class);
 
     // Roles & Permissions Module

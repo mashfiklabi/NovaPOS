@@ -33,11 +33,49 @@ const paymentForm = useForm({
     notes: '',
 });
 
+const isRefundModalOpen = ref(false);
+const refundForm = useForm({
+    amount: Number(props.sale.eligible_settlement_amount || 0),
+    refund_method: 'cash',
+    reference_number: '',
+    reason: '',
+});
+
+const isCreditModalOpen = ref(false);
+const creditForm = useForm({
+    amount: Number(props.sale.eligible_settlement_amount || 0),
+    reason: '',
+});
+
 const submitPayment = () => {
     paymentForm.post(`/sales/${props.sale.id}/pay`, {
         preserveScroll: true,
         onSuccess: () => {
             isPaymentModalOpen.value = false;
+        },
+        onError: (err) => {
+            if (err.error) alert(err.error);
+        }
+    });
+};
+
+const submitRefund = () => {
+    refundForm.post(`/sales/${props.sale.id}/refund`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            isRefundModalOpen.value = false;
+        },
+        onError: (err) => {
+            if (err.error) alert(err.error);
+        }
+    });
+};
+
+const submitCredit = () => {
+    creditForm.post(`/sales/${props.sale.id}/credit`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            isCreditModalOpen.value = false;
         },
         onError: (err) => {
             if (err.error) alert(err.error);
@@ -227,6 +265,111 @@ const deleteSale = () => {
                 <AppCard v-if="sale.notes" title="Notes">
                     <p class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{{ sale.notes }}</p>
                 </AppCard>
+
+                <!-- Settlement Section for Cancelled Sales -->
+                <AppCard v-if="sale.status === 'cancelled'" title="Cancelled Sale Payment Settlement Workflow">
+                    <div class="space-y-4">
+                        <div class="p-4 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-800 text-sm">
+                            <div class="font-bold text-amber-900 dark:text-amber-300 text-base mb-2">
+                                Settlement Status & Eligibility
+                            </div>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-gray-700 dark:text-gray-300">
+                                <div>
+                                    <span class="block text-xs text-gray-500">Original Paid</span>
+                                    <span class="font-semibold">{{ formatCurrency(sale.paid_amount) }}</span>
+                                </div>
+                                <div>
+                                    <span class="block text-xs text-gray-500">Settled Amount</span>
+                                    <span class="font-semibold text-emerald-600 dark:text-emerald-400">{{ formatCurrency(sale.settled_amount || 0) }}</span>
+                                </div>
+                                <div>
+                                    <span class="block text-xs text-gray-500">Eligible Settlement Balance</span>
+                                    <span class="font-bold text-indigo-600 dark:text-indigo-400">{{ formatCurrency(sale.eligible_settlement_amount || 0) }}</span>
+                                </div>
+                                <div>
+                                    <span class="block text-xs text-gray-500">Refund Status</span>
+                                    <span class="font-semibold capitalize">{{ Number(sale.eligible_settlement_amount || 0) > 0 ? 'Pending Settlement' : 'Fully Settled' }}</span>
+                                </div>
+                            </div>
+
+                            <div v-if="Number(sale.eligible_settlement_amount || 0) > 0" class="mt-4 flex flex-wrap gap-3">
+                                <AppButton
+                                    v-if="hasPermission('sales.refund')"
+                                    variant="primary"
+                                    size="sm"
+                                    class="!bg-emerald-600 hover:!bg-emerald-500"
+                                    @click="refundForm.amount = Number(sale.eligible_settlement_amount || 0); isRefundModalOpen = true"
+                                >
+                                    Refund Payment
+                                </AppButton>
+
+                                <AppButton
+                                    v-if="hasPermission('customers.credit') && sale.customer_id"
+                                    variant="secondary"
+                                    size="sm"
+                                    class="!bg-indigo-600 !text-white hover:!bg-indigo-500"
+                                    @click="creditForm.amount = Number(sale.eligible_settlement_amount || 0); isCreditModalOpen = true"
+                                >
+                                    Use for Other Products / Store Credit
+                                </AppButton>
+                            </div>
+                        </div>
+
+                        <!-- Refund History -->
+                        <div v-if="sale.refunds && sale.refunds.length > 0">
+                            <h4 class="text-xs font-semibold uppercase text-gray-500 mb-2">Refunds Issued</h4>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-800 text-sm">
+                                    <thead>
+                                        <tr class="text-left text-xs font-semibold text-gray-500 uppercase">
+                                            <th class="py-2 px-3">Date</th>
+                                            <th class="py-2 px-3">Method</th>
+                                            <th class="py-2 px-3">Ref #</th>
+                                            <th class="py-2 px-3">Processor</th>
+                                            <th class="py-2 px-3 text-right">Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                                        <tr v-for="ref in sale.refunds" :key="ref.id">
+                                            <td class="py-2 px-3 text-xs">{{ formatDate(ref.processed_at) }}</td>
+                                            <td class="py-2 px-3 text-xs capitalize font-semibold">{{ ref.refund_method }}</td>
+                                            <td class="py-2 px-3 text-xs text-gray-500">{{ ref.reference_number || '—' }}</td>
+                                            <td class="py-2 px-3 text-xs text-gray-500">{{ ref.processor ? ref.processor.name : 'System' }}</td>
+                                            <td class="py-2 px-3 text-xs text-right font-bold text-emerald-600">{{ formatCurrency(ref.amount) }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Store Credit Ledger History for Sale -->
+                        <div v-if="sale.credit_ledgers && sale.credit_ledgers.length > 0">
+                            <h4 class="text-xs font-semibold uppercase text-gray-500 mb-2">Store Credits Issued</h4>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-800 text-sm">
+                                    <thead>
+                                        <tr class="text-left text-xs font-semibold text-gray-500 uppercase">
+                                            <th class="py-2 px-3">Date</th>
+                                            <th class="py-2 px-3">Type</th>
+                                            <th class="py-2 px-3">Ref #</th>
+                                            <th class="py-2 px-3">Created By</th>
+                                            <th class="py-2 px-3 text-right">Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                                        <tr v-for="cred in sale.credit_ledgers" :key="cred.id">
+                                            <td class="py-2 px-3 text-xs">{{ formatDate(cred.created_at) }}</td>
+                                            <td class="py-2 px-3 text-xs uppercase font-bold text-indigo-600">{{ cred.type }}</td>
+                                            <td class="py-2 px-3 text-xs text-gray-500">{{ cred.reference_number || '—' }}</td>
+                                            <td class="py-2 px-3 text-xs text-gray-500">{{ cred.creator ? cred.creator.name : 'System' }}</td>
+                                            <td class="py-2 px-3 text-xs text-right font-bold text-indigo-600">{{ formatCurrency(cred.amount) }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </AppCard>
             </div>
 
             <!-- Right 1 Col: Status & Financials -->
@@ -303,6 +446,104 @@ const deleteSale = () => {
                 </AppCard>
             </div>
         </div>
+
+        <!-- Process Refund Modal -->
+        <AppModal
+            :show="isRefundModalOpen"
+            title="Process Refund for Cancelled Sale"
+            @close="isRefundModalOpen = false"
+        >
+            <form @submit.prevent="submitRefund" class="space-y-4">
+                <div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                        Refunding payment for Invoice <strong>#{{ sale.invoice_number }}</strong>
+                    </p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                        Original Paid: <strong>{{ formatCurrency(sale.paid_amount) }}</strong> | Eligible Settlement: <strong class="text-emerald-600 dark:text-emerald-400">{{ formatCurrency(sale.eligible_settlement_amount || 0) }}</strong>
+                    </p>
+                    <AppInput
+                        label="Refund Amount"
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        :max="sale.eligible_settlement_amount || 0"
+                        v-model.number="refundForm.amount"
+                        :error="refundForm.errors.amount"
+                        required
+                    />
+                </div>
+                <div>
+                    <AppSelect
+                        label="Refund Method"
+                        v-model="refundForm.refund_method"
+                        :options="[
+                            { value: 'cash', label: 'Cash' },
+                            { value: 'card', label: 'Credit/Debit Card' },
+                            { value: 'bank_transfer', label: 'Bank Transfer' },
+                            { value: 'other', label: 'Other' }
+                        ]"
+                        required
+                    />
+                </div>
+                <div>
+                    <AppInput
+                        label="Reference / Transaction #"
+                        v-model="refundForm.reference_number"
+                        :error="refundForm.errors.reference_number"
+                    />
+                </div>
+                <div>
+                    <AppInput
+                        label="Reason for Refund"
+                        v-model="refundForm.reason"
+                        :error="refundForm.errors.reason"
+                    />
+                </div>
+                <div class="flex justify-end space-x-2 pt-3">
+                    <AppButton variant="secondary" @click="isRefundModalOpen = false">Cancel</AppButton>
+                    <AppButton variant="primary" class="!bg-emerald-600" :loading="refundForm.processing" @click="submitRefund">Confirm Refund</AppButton>
+                </div>
+            </form>
+        </AppModal>
+
+        <!-- Issue Store Credit Modal -->
+        <AppModal
+            :show="isCreditModalOpen"
+            title="Convert Payment to Customer Store Credit"
+            @close="isCreditModalOpen = false"
+        >
+            <form @submit.prevent="submitCredit" class="space-y-4">
+                <div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                        Issuing store credit for Customer <strong>{{ sale.customer ? sale.customer.name : 'Customer' }}</strong> from Invoice <strong>#{{ sale.invoice_number }}</strong>
+                    </p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                        Original Paid: <strong>{{ formatCurrency(sale.paid_amount) }}</strong> | Eligible Settlement: <strong class="text-indigo-600 dark:text-indigo-400">{{ formatCurrency(sale.eligible_settlement_amount || 0) }}</strong>
+                    </p>
+                    <AppInput
+                        label="Store Credit Amount"
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        :max="sale.eligible_settlement_amount || 0"
+                        v-model.number="creditForm.amount"
+                        :error="creditForm.errors.amount"
+                        required
+                    />
+                </div>
+                <div>
+                    <AppInput
+                        label="Reason / Notes"
+                        v-model="creditForm.reason"
+                        :error="creditForm.errors.reason"
+                    />
+                </div>
+                <div class="flex justify-end space-x-2 pt-3">
+                    <AppButton variant="secondary" @click="isCreditModalOpen = false">Cancel</AppButton>
+                    <AppButton variant="primary" class="!bg-indigo-600" :loading="creditForm.processing" @click="submitCredit">Confirm Store Credit</AppButton>
+                </div>
+            </form>
+        </AppModal>
 
         <!-- Record Payment Modal -->
         <AppModal

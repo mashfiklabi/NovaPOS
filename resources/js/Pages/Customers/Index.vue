@@ -2,6 +2,7 @@
 import { ref, watch, computed } from 'vue';
 import { Head, useForm, router, usePage } from '@inertiajs/vue3';
 import { PageProps, Customer, PaginatedData } from '@/types';
+import { formatCurrency, formatDate } from '@/Composables/useFormatters';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import AppCard from '@/Components/AppCard.vue';
 import PageHeader from '@/Components/PageHeader.vue';
@@ -309,7 +310,7 @@ const exportCSV = () => {
             </div>
 
             <div v-else>
-                <AppTable :headers="['', 'Customer Name', 'Email', 'Phone', 'City/Country', 'Tax Number', 'Status', 'Actions']">
+                <AppTable :headers="['', 'Customer Name', 'Email', 'Phone', 'Store Credit', 'Tax Number', 'Status', 'Actions']">
                     <tr v-for="customer in customers.data" :key="customer.id" class="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
                         <!-- Checkbox column -->
                         <td class="w-10 pl-6 py-4">
@@ -329,8 +330,8 @@ const exportCSV = () => {
                         <td class="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">
                             {{ customer.phone || 'N/A' }}
                         </td>
-                        <td class="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">
-                            {{ [customer.city, customer.country].filter(Boolean).join(', ') || 'N/A' }}
+                        <td class="px-6 py-4 text-sm font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
+                            {{ formatCurrency((customer as any).store_credit_balance || 0) }}
                         </td>
                         <td class="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">
                             {{ customer.tax_number || 'N/A' }}

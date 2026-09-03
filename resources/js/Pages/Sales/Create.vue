@@ -19,7 +19,7 @@ interface CartItem {
 }
 
 const props = defineProps<{
-    customers: Array<{ id: number; name: string; phone: string | null }>;
+    customers: Array<{ id: number; name: string; phone: string | null; store_credit_balance?: number }>;
     products: POSProduct[];
 }>();
 
@@ -40,6 +40,15 @@ const barcodeInputRef = ref<HTMLInputElement | null>(null);
 // Customer selection & Modal State
 const selectedCustomerId = ref<number | null>(null);
 const isCustomerModalOpen = ref(false);
+
+const selectedCustomer = computed(() => {
+    if (!selectedCustomerId.value) return null;
+    return customerList.value.find(c => c.id === selectedCustomerId.value) || null;
+});
+
+const availableCustomerCredit = computed(() => {
+    return Number(selectedCustomer.value?.store_credit_balance || 0);
+});
 
 const customerForm = useForm({
     name: '',
@@ -546,6 +555,12 @@ const submitSale = () => {
                             </div>
                         </div>
 
+                        <!-- Available Customer Store Credit Notice -->
+                        <div v-if="selectedCustomer && availableCustomerCredit > 0" class="p-2 bg-indigo-50 border border-indigo-200 dark:bg-indigo-950/40 dark:border-indigo-800 rounded-lg flex items-center justify-between text-xs">
+                            <span class="text-indigo-900 dark:text-indigo-300 font-semibold">Available Store Credit:</span>
+                            <span class="font-bold text-indigo-700 dark:text-indigo-300">{{ formatCurrency(availableCustomerCredit) }}</span>
+                        </div>
+
                         <!-- Payment Options -->
                         <div class="grid grid-cols-2 gap-2 pt-1">
                             <div>
@@ -557,6 +572,7 @@ const submitSale = () => {
                                     <option value="cash">Cash</option>
                                     <option value="card">Credit/Debit Card</option>
                                     <option value="bank_transfer">Bank Transfer</option>
+                                    <option v-if="selectedCustomer && availableCustomerCredit > 0" value="store_credit">Store Credit</option>
                                     <option value="other">Other</option>
                                 </select>
                             </div>
