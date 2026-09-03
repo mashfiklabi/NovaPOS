@@ -42,6 +42,23 @@ class Customer extends Model
         return $this->hasMany(Sale::class);
     }
 
+    public function creditLedgers(): HasMany
+    {
+        return $this->hasMany(CustomerCreditLedger::class);
+    }
+
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(SaleRefund::class);
+    }
+
+    public function getStoreCreditBalanceAttribute(): float
+    {
+        $latest = $this->creditLedgers()->latest('id')->first();
+
+        return $latest ? (float) $latest->balance_after : 0.0;
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

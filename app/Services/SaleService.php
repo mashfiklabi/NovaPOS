@@ -4,11 +4,16 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Enums\CreditLedgerType;
 use App\Enums\PaymentStatus;
 use App\Enums\SalePaymentMethod;
 use App\Enums\SaleStatus;
+use App\Enums\StockMovementType;
+use App\Models\Customer;
+use App\Models\CustomerCreditLedger;
 use App\Models\Product;
 use App\Models\Sale;
+use App\Models\StockMovement;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -60,9 +65,9 @@ class SaleService
                     $product->decrement('current_stock', $itemData['quantity']);
                     $freshProduct = $product->fresh();
 
-                    \App\Models\StockMovement::create([
+                    StockMovement::create([
                         'product_id' => $product->id,
-                        'movement_type' => \App\Enums\StockMovementType::OUT,
+                        'movement_type' => StockMovementType::OUT,
                         'quantity' => -$itemData['quantity'],
                         'reference_type' => Sale::class,
                         'reference_id' => $sale->id,
@@ -73,13 +78,50 @@ class SaleService
             }
 
             if ($sale->paid_amount > 0) {
+                // If payment method is STORE_CREDIT, handle atomic store credit deduction
+                if ($paymentMethod === SalePaymentMethod::STORE_CREDIT->value) {
+                    if (! $sale->customer_id) {
+                        throw new InvalidArgumentException('Store credit payment requires a selected customer.');
+                    }
+
+                    $customer = Customer::where('id', $sale->customer_id)->lockForUpdate()->firstOrFail();
+                    $availableCredit = $customer->store_credit_balance;
+
+                    if ($sale->paid_amount > $availableCredit) {
+                        throw new InvalidArgumentException("Payment amount (\${$sale->paid_amount}) exceeds customer's available store credit (\${$availableCredit}).");
+                    }
+
+                    $newCreditBalance = round($availableCredit - $sale->paid_amount, 2);
+
+                    CustomerCreditLedger::create([
+                        'customer_id' => $customer->id,
+                        'sale_id' => $sale->id,
+                        'type' => CreditLedgerType::DEBIT,
+                        'amount' => $sale->paid_amount,
+                        'balance_after' => $newCreditBalance,
+                        'reference_number' => "POS-{$sale->invoice_number}",
+                        'reason' => "Used store credit for Invoice #{$sale->invoice_number}",
+                        'created_by' => $userId,
+                    ]);
+
+                    activity()
+                        ->performedOn($sale)
+                        ->causedBy(Auth::user())
+                        ->withProperties([
+                            'customer_id' => $customer->id,
+                            'amount_deducted' => $sale->paid_amount,
+                            'remaining_credit' => $newCreditBalance,
+                        ])
+                        ->log("Used {$sale->paid_amount} store credit for Invoice #{$sale->invoice_number}");
+                }
+
                 $sale->payments()->create([
                     'uuid' => (string) Str::uuid(),
                     'user_id' => $userId,
                     'payment_method' => $paymentMethod,
                     'amount' => $sale->paid_amount,
                     'paid_at' => now(),
-                    'notes' => 'Initial payment at checkout',
+                    'notes' => $paymentMethod === SalePaymentMethod::STORE_CREDIT->value ? 'Paid via Customer Store Credit' : 'Initial payment at checkout',
                 ]);
             }
 
@@ -116,9 +158,9 @@ class SaleService
                         $product->increment('current_stock', $oldItem->quantity);
                         $freshProduct = $product->fresh();
 
-                        \App\Models\StockMovement::create([
+                        StockMovement::create([
                             'product_id' => $product->id,
-                            'movement_type' => \App\Enums\StockMovementType::ADJUSTMENT,
+                            'movement_type' => StockMovementType::ADJUSTMENT,
                             'quantity' => $oldItem->quantity,
                             'reference_type' => Sale::class,
                             'reference_id' => $lockedSale->id,
@@ -163,9 +205,9 @@ class SaleService
                         $product->decrement('current_stock', $itemData['quantity']);
                         $freshProduct = $product->fresh();
 
-                        \App\Models\StockMovement::create([
+                        StockMovement::create([
                             'product_id' => $product->id,
-                            'movement_type' => \App\Enums\StockMovementType::OUT,
+                            'movement_type' => StockMovementType::OUT,
                             'quantity' => -$itemData['quantity'],
                             'reference_type' => Sale::class,
                             'reference_id' => $lockedSale->id,
@@ -233,10 +275,48 @@ class SaleService
                 'payment_status' => $newPaymentStatus,
             ]);
 
+            $paymentMethod = $paymentData['payment_method'] ?? SalePaymentMethod::CASH->value;
+
+            if ($paymentMethod === SalePaymentMethod::STORE_CREDIT->value) {
+                if (! $lockedSale->customer_id) {
+                    throw new InvalidArgumentException('Store credit payment requires a selected customer.');
+                }
+
+                $customer = Customer::where('id', $lockedSale->customer_id)->lockForUpdate()->firstOrFail();
+                $availableCredit = $customer->store_credit_balance;
+
+                if ($amount > $availableCredit) {
+                    throw new InvalidArgumentException("Payment amount (\${$amount}) exceeds customer's available store credit (\${$availableCredit}).");
+                }
+
+                $newCreditBalance = round($availableCredit - $amount, 2);
+
+                CustomerCreditLedger::create([
+                    'customer_id' => $customer->id,
+                    'sale_id' => $lockedSale->id,
+                    'type' => CreditLedgerType::DEBIT,
+                    'amount' => $amount,
+                    'balance_after' => $newCreditBalance,
+                    'reference_number' => "PAY-{$lockedSale->invoice_number}",
+                    'reason' => "Used store credit for Invoice #{$lockedSale->invoice_number}",
+                    'created_by' => $userId,
+                ]);
+
+                activity()
+                    ->performedOn($lockedSale)
+                    ->causedBy(Auth::user())
+                    ->withProperties([
+                        'customer_id' => $customer->id,
+                        'amount_deducted' => $amount,
+                        'remaining_credit' => $newCreditBalance,
+                    ])
+                    ->log("Used {$amount} store credit for Invoice #{$lockedSale->invoice_number}");
+            }
+
             $lockedSale->payments()->create([
                 'uuid' => (string) Str::uuid(),
                 'user_id' => $userId,
-                'payment_method' => $paymentData['payment_method'] ?? SalePaymentMethod::CASH->value,
+                'payment_method' => $paymentMethod,
                 'amount' => $amount,
                 'reference_number' => $paymentData['reference_number'] ?? null,
                 'paid_at' => now(),
@@ -259,6 +339,7 @@ class SaleService
     public function cancel(Sale $sale): Sale
     {
         $userId = Auth::id();
+
         return DB::transaction(function () use ($sale, $userId) {
             $lockedSale = Sale::where('id', $sale->id)->lockForUpdate()->firstOrFail();
 
@@ -274,9 +355,9 @@ class SaleService
                         $product->increment('current_stock', $item->quantity);
                         $freshProduct = $product->fresh();
 
-                        \App\Models\StockMovement::create([
+                        StockMovement::create([
                             'product_id' => $product->id,
-                            'movement_type' => \App\Enums\StockMovementType::ADJUSTMENT,
+                            'movement_type' => StockMovementType::ADJUSTMENT,
                             'quantity' => $item->quantity,
                             'reference_type' => Sale::class,
                             'reference_id' => $lockedSale->id,
@@ -416,9 +497,9 @@ class SaleService
             $grandTotal = 0.0;
         }
 
-            if ($paid > $grandTotal) {
-                throw new InvalidArgumentException("Initial paid amount (\${$paid}) cannot exceed sale grand total (\${$grandTotal}).");
-            }
+        if ($paid > $grandTotal) {
+            throw new InvalidArgumentException("Initial paid amount (\${$paid}) cannot exceed sale grand total (\${$grandTotal}).");
+        }
 
         $dueAmount = round($grandTotal - $paid, 2);
         if ($dueAmount < 0) {

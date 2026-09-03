@@ -99,6 +99,38 @@ export interface SalePayment {
     };
 }
 
+export interface SaleRefund {
+    id: number;
+    sale_id: number;
+    customer_id: number | null;
+    amount: number | string;
+    refund_method: string;
+    reason: string | null;
+    reference_number: string | null;
+    status: string;
+    processed_at: string;
+    processor?: {
+        id: number;
+        name: string;
+    };
+}
+
+export interface CustomerCreditLedger {
+    id: number;
+    customer_id: number;
+    sale_id: number | null;
+    type: 'credit' | 'debit';
+    amount: number | string;
+    balance_after: number | string;
+    reference_number: string | null;
+    reason: string | null;
+    created_at: string;
+    creator?: {
+        id: number;
+        name: string;
+    };
+}
+
 export interface Sale {
     id: number;
     uuid: string;
@@ -119,10 +151,14 @@ export interface Sale {
     notes: string | null;
     created_at: string;
     deleted_at: string | null;
+    settled_amount?: number | string;
+    eligible_settlement_amount?: number | string;
     customer?: Customer | null;
     user?: User;
     items?: SaleItem[];
     payments?: SalePayment[];
+    refunds?: SaleRefund[];
+    credit_ledgers?: CustomerCreditLedger[];
 }
 
 export interface PaginatedData<T> {

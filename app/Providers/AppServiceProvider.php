@@ -7,21 +7,25 @@ namespace App\Providers;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Customer;
+use App\Models\CustomerCreditLedger;
 use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\Sale;
 use App\Models\SalePayment;
+use App\Models\SaleRefund;
 use App\Models\Setting;
 use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
 use App\Observers\BrandObserver;
 use App\Observers\CategoryObserver;
+use App\Observers\CustomerCreditLedgerObserver;
 use App\Observers\CustomerObserver;
 use App\Observers\ProductObserver;
 use App\Observers\PurchaseObserver;
 use App\Observers\SaleObserver;
 use App\Observers\SalePaymentObserver;
+use App\Observers\SaleRefundObserver;
 use App\Observers\SupplierObserver;
 use App\Observers\UnitObserver;
 use App\Observers\UserObserver;
@@ -69,6 +73,8 @@ class AppServiceProvider extends ServiceProvider
         Customer::observe(CustomerObserver::class);
         Sale::observe(SaleObserver::class);
         SalePayment::observe(SalePaymentObserver::class);
+        SaleRefund::observe(SaleRefundObserver::class);
+        CustomerCreditLedger::observe(CustomerCreditLedgerObserver::class);
 
         // Explicitly register RBAC & configuration Policies
         Gate::policy(User::class, UserPolicy::class);

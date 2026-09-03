@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Models\Unit;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateProductRequest extends FormRequest
@@ -46,7 +47,7 @@ class UpdateProductRequest extends FormRequest
                 return;
             }
 
-            $unit = \App\Models\Unit::find($unitId);
+            $unit = Unit::find($unitId);
             if ($unit && $unit->allow_decimal === 'disallowed') {
                 $stock = $this->input('current_stock');
                 if ($stock !== null && floor((float) $stock) != (float) $stock) {

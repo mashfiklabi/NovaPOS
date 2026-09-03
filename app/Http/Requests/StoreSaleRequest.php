@@ -6,6 +6,7 @@ namespace App\Http\Requests;
 
 use App\Models\Product;
 use App\Models\Sale;
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreSaleRequest extends FormRequest
@@ -16,7 +17,7 @@ class StoreSaleRequest extends FormRequest
     }
 
     /**
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
@@ -29,7 +30,7 @@ class StoreSaleRequest extends FormRequest
             'tax_amount' => ['nullable', 'numeric', 'min:0'],
             'shipping_cost' => ['nullable', 'numeric', 'min:0'],
             'paid_amount' => ['nullable', 'numeric', 'min:0'],
-            'payment_method' => ['nullable', 'string', 'in:cash,card,bank_transfer,other'],
+            'payment_method' => ['nullable', 'string', 'in:cash,card,bank_transfer,store_credit,other'],
             'status' => ['required', 'string', 'in:draft,completed,cancelled'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],

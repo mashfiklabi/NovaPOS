@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Enums\PaymentStatus;
+use App\Enums\SalePaymentMethod;
 use App\Enums\SaleStatus;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -189,9 +191,9 @@ class SaleTest extends TestCase
         ]);
 
         $sale->payments()->create([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'uuid' => (string) Str::uuid(),
             'user_id' => $this->adminUser->id,
-            'payment_method' => \App\Enums\SalePaymentMethod::CASH,
+            'payment_method' => SalePaymentMethod::CASH,
             'amount' => 40.00,
             'paid_at' => now(),
         ]);

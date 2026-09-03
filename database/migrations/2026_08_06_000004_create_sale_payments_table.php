@@ -18,7 +18,7 @@ return new class extends Migration
             $table->uuid('uuid')->unique();
             $table->foreignId('sale_id')->constrained('sales')->onDelete('cascade');
             $table->foreignId('user_id')->constrained('users')->onDelete('restrict');
-            $table->enum('payment_method', ['cash', 'card', 'bank_transfer', 'other'])->default('cash');
+            $table->string('payment_method')->default('cash');
             $table->decimal('amount', 18, 2);
             $table->string('reference_number')->nullable();
             $table->timestamp('paid_at');

@@ -8,12 +8,15 @@ use App\Helpers\CsvExporter;
 use App\Http\Requests\BulkDestroySaleRequest;
 use App\Http\Requests\BulkRestoreSaleRequest;
 use App\Http\Requests\CancelSaleRequest;
+use App\Http\Requests\StoreSaleCreditRequest;
 use App\Http\Requests\StoreSalePaymentRequest;
+use App\Http\Requests\StoreSaleRefundRequest;
 use App\Http\Requests\StoreSaleRequest;
 use App\Http\Requests\UpdateSaleRequest;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Sale;
+use App\Services\SaleRefundService;
 use App\Services\SaleService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,7 +27,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class SaleController extends Controller
 {
     public function __construct(
-        protected SaleService $saleService
+        protected SaleService $saleService,
+        protected SaleRefundService $saleRefundService
     ) {}
 
     /**
@@ -85,7 +89,12 @@ class SaleController extends Controller
         $customers = Customer::where('status', 'active')
             ->select('id', 'name', 'phone')
             ->orderBy('name')
-            ->get();
+            ->get()
+            ->map(function ($c) {
+                $c->store_credit_balance = $c->store_credit_balance;
+
+                return $c;
+            });
 
         $products = Product::where('status', 'active')
             ->select('id', 'name', 'sku', 'barcode', 'selling_price', 'current_stock', 'allow_decimal', 'tax_type', 'tax_rate')
@@ -148,11 +157,36 @@ class SaleController extends Controller
     {
         $this->authorize('view', $sale);
 
-        $sale->load(['customer', 'items.product', 'cashier', 'payments.user']);
+        $sale->load(['customer', 'items.product', 'cashier', 'payments.user', 'refunds.processor', 'creditLedgers.creator']);
+
+        $sale->settled_amount = $sale->settled_amount;
+        $sale->eligible_settlement_amount = $sale->eligible_settlement_amount;
 
         return Inertia::render('Sales/Show', [
             'sale' => $sale,
         ]);
+    }
+
+    public function refund(StoreSaleRefundRequest $request, Sale $sale): RedirectResponse
+    {
+        try {
+            $this->saleRefundService->processRefund($sale, $request->validated());
+
+            return redirect()->back()->with('success', 'Refund processed successfully.');
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+        }
+    }
+
+    public function credit(StoreSaleCreditRequest $request, Sale $sale): RedirectResponse
+    {
+        try {
+            $this->saleRefundService->convertToStoreCredit($sale, $request->validated());
+
+            return redirect()->back()->with('success', 'Store credit issued successfully.');
+        } catch (\InvalidArgumentException $e) {
+            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+        }
     }
 
     /**

@@ -121,6 +121,9 @@ class DatabaseSeeder extends Seeder
             'sales.restore' => 'Ability to restore soft deleted sales',
             'sales.bulk_delete' => 'Ability to bulk delete sales',
             'sales.bulk_restore' => 'Ability to bulk restore sales',
+            'sales.refund' => 'Ability to process refunds for cancelled sales',
+
+            'customers.credit' => 'Ability to issue store credit for cancelled sales and manage customer credit',
         ];
 
         foreach ($permissions as $name => $description) {
@@ -212,6 +215,8 @@ class DatabaseSeeder extends Seeder
             'sales.restore',
             'sales.bulk_delete',
             'sales.bulk_restore',
+            'sales.refund',
+            'customers.credit',
         ]);
 
         $cashierRole = Role::findOrCreate('Cashier', 'web');
@@ -325,6 +330,24 @@ class DatabaseSeeder extends Seeder
                 'value' => null,
                 'group' => 'appearance',
                 'type' => 'file',
+            ],
+            [
+                'key' => 'refund_enabled',
+                'value' => 'true',
+                'group' => 'pos',
+                'type' => 'boolean',
+            ],
+            [
+                'key' => 'refund_percentage',
+                'value' => '100',
+                'group' => 'pos',
+                'type' => 'number',
+            ],
+            [
+                'key' => 'store_credit_enabled',
+                'value' => 'true',
+                'group' => 'pos',
+                'type' => 'boolean',
             ],
         ];
 
